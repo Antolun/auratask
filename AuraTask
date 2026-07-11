@@ -1,0 +1,913 @@
+#!/usr/bin/env python3
+import sys
+import os
+import datetime
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QHBoxLayout, 
+    QVBoxLayout, QTabWidget, QLabel, QFrame, QMessageBox,
+    QLineEdit, QComboBox, QDialog, QSystemTrayIcon, QInputDialog,
+    QListWidget, QListWidgetItem, QStyle, QPushButton, QMenu,
+    QFileDialog
+)
+from PyQt6.QtGui import QIcon, QColor, QPixmap
+from PyQt6.QtCore import Qt
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
+
+from database import Database
+from style import STYLE_SHEET
+from widgets import (
+    KanbanColumnWidget, PomodoroWidget, 
+    TaskDialog, AnalyticsChartWidget, CircularGoalWidget,
+    HeatmapWidget, DonutChartWidget, CalendarViewWidget,
+    create_vector_icon
+)
+from localization import Localization
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        
+        self.setWindowTitle(Localization.get("app_title"))
+        self.setMinimumSize(1150, 750)
+        
+        # Set Window Icon
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "logo.png")
+        if os.path.exists(logo_path):
+            self.setWindowIcon(QIcon(logo_path))
+            
+        # System Tray Icon for Desktop Notifications
+        self.tray_icon = QSystemTrayIcon(self)
+        if os.path.exists(logo_path):
+            self.tray_icon.setIcon(QIcon(logo_path))
+        else:
+            self.tray_icon.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
+            
+        # Create Tray Context Menu
+        self.tray_menu = QMenu(self)
+        show_action = self.tray_menu.addAction(Localization.get("show"))
+        show_action.triggered.connect(self.show_and_restore)
+        self.tray_menu.addSeparator()
+        quit_action = self.tray_menu.addAction(Localization.get("quit_app"))
+        quit_action.triggered.connect(self.quit_application)
+        
+        self.tray_icon.setContextMenu(self.tray_menu)
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        self.tray_icon.show()
+        
+        # Track really quit
+        self.really_quit = False
+        
+        self.init_ui()
+        self.refresh_all()
+
+    def init_ui(self):
+        # Central Widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Main Horizontal Layout
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
+
+        # ==========================================
+        # LEFT REGION: TAB WIDGET (Kanban & Analytics)
+        # ==========================================
+        self.tab_widget = QTabWidget()
+        self.tab_widget.tabBar().setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        
+        # Tab 1: Kanban Board
+        kanban_tab = QWidget()
+        kanban_main_layout = QVBoxLayout(kanban_tab)
+        kanban_main_layout.setContentsMargins(0, 0, 0, 0)
+        kanban_main_layout.setSpacing(5)
+
+        # Priority Filter Bar
+        filter_bar = QHBoxLayout()
+        filter_bar.setContentsMargins(5, 10, 5, 0)
+        
+        # Search Input
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText(Localization.get("search_placeholder").replace("🔍 ", ""))
+        self.search_input.setStyleSheet("max-width: 200px; padding: 4px 8px; font-size: 12px;")
+        self.search_input.textChanged.connect(self.refresh_columns)
+        filter_bar.addWidget(self.search_input)
+
+        filter_bar.addStretch()
+        
+        filter_lbl = QLabel(Localization.get("filter_priority"))
+        filter_lbl.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        filter_bar.addWidget(filter_lbl)
+
+        self.filter_combo = QComboBox()
+        self.filter_combo.setStyleSheet("max-width: 120px; padding: 4px 8px; font-size: 12px;")
+        self.filter_combo.addItem(Localization.get("all_priorities"), "all")
+        self.filter_combo.addItem(Localization.get("low"), "low")
+        self.filter_combo.addItem(Localization.get("medium"), "medium")
+        self.filter_combo.addItem(Localization.get("high"), "high")
+        self.filter_combo.currentIndexChanged.connect(self.refresh_columns)
+        filter_bar.addWidget(self.filter_combo)
+
+        # Sort Filter Bar
+        sort_lbl = QLabel(Localization.get("sort_by"))
+        sort_lbl.setStyleSheet("color: #94a3b8; font-size: 12px; margin-left: 10px;")
+        filter_bar.addWidget(sort_lbl)
+
+        self.sort_combo = QComboBox()
+        self.sort_combo.setStyleSheet("max-width: 120px; padding: 4px 8px; font-size: 12px;")
+        self.sort_combo.addItem(Localization.get("sort_date"), "date")
+        self.sort_combo.addItem(Localization.get("sort_priority"), "priority")
+        self.sort_combo.addItem(Localization.get("sort_due"), "due")
+        self.sort_combo.addItem(Localization.get("sort_focus"), "focus")
+        self.sort_combo.currentIndexChanged.connect(self.refresh_columns)
+        filter_bar.addWidget(self.sort_combo)
+        
+        kanban_main_layout.addLayout(filter_bar)
+
+        kanban_cols_layout = QHBoxLayout()
+        kanban_cols_layout.setContentsMargins(0, 0, 0, 0)
+        kanban_cols_layout.setSpacing(10)
+
+        # 3 Columns - Using internal IDs: todo, doing, done
+        self.col_todo = KanbanColumnWidget("todo", Localization.get("todo"))
+        self.col_doing = KanbanColumnWidget("doing", Localization.get("doing"))
+        self.col_done = KanbanColumnWidget("done", Localization.get("done"))
+
+        # Connect Column Signals
+        for col in [self.col_todo, self.col_doing, self.col_done]:
+            col.add_task_clicked.connect(self.on_add_task)
+            col.card_move_left.connect(self.on_move_left)
+            col.card_move_right.connect(self.on_move_right)
+            col.card_edit.connect(self.on_edit_task)
+            col.card_delete.connect(self.on_delete_task)
+            col.card_subtask_toggled.connect(self.on_subtask_toggled)
+            if col.column_id == "done":
+                col.clear_clicked.connect(self.on_clear_completed)
+
+        kanban_cols_layout.addWidget(self.col_todo)
+        kanban_cols_layout.addWidget(self.col_doing)
+        kanban_cols_layout.addWidget(self.col_done)
+        
+        kanban_main_layout.addLayout(kanban_cols_layout)
+        
+        self.tab_widget.addTab(kanban_tab, create_vector_icon("board"), Localization.get("task_board").replace("📋 ", ""))
+
+        # Tab 2: Analytics & Stats
+        analytics_tab = QWidget()
+        analytics_layout = QVBoxLayout(analytics_tab)
+        analytics_layout.setContentsMargins(10, 20, 10, 10)
+        analytics_layout.setSpacing(15)
+
+        # Big stats cards row
+        stats_cards_row = QHBoxLayout()
+        stats_cards_row.setSpacing(15)
+
+        # Stat Card 1: Total Focus Minutes
+        self.card_total_time = QFrame()
+        self.card_total_time.setObjectName("sidebarPanel")
+        self.card_total_time.mouseDoubleClickEvent = self.on_total_time_card_double_clicked
+        self.card_total_time.setToolTip(Localization.get("double_click_to_change_total_focus"))
+        time_card_layout = QVBoxLayout(self.card_total_time)
+        time_card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_stat_time_val = QLabel("0 " + Localization.get("min"))
+        self.lbl_stat_time_val.setStyleSheet("font-size: 24px; font-weight: bold; color: #14b8a6;")
+        lbl_stat_time_title = QLabel(Localization.get("total_focus_time"))
+        lbl_stat_time_title.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        time_card_layout.addWidget(self.lbl_stat_time_val, 0, Qt.AlignmentFlag.AlignCenter)
+        time_card_layout.addWidget(lbl_stat_time_title, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Stat Card 2: Total Sessions Completed
+        self.card_total_pomos = QFrame()
+        self.card_total_pomos.setObjectName("sidebarPanel")
+        pomo_card_layout = QVBoxLayout(self.card_total_pomos)
+        pomo_card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_stat_pomo_val = QLabel("0 " + Localization.get("sessions"))
+        self.lbl_stat_pomo_val.setStyleSheet("font-size: 24px; font-weight: bold; color: #10b981;")
+        lbl_stat_pomo_title = QLabel(Localization.get("completed_pomodoros"))
+        lbl_stat_pomo_title.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        pomo_card_layout.addWidget(self.lbl_stat_pomo_val, 0, Qt.AlignmentFlag.AlignCenter)
+        pomo_card_layout.addWidget(lbl_stat_pomo_title, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Stat Card 3: Daily Goal
+        self.card_goal = QFrame()
+        self.card_goal.setObjectName("sidebarPanel")
+        self.card_goal.mouseDoubleClickEvent = self.on_goal_card_double_clicked
+        goal_card_layout = QVBoxLayout(self.card_goal)
+        goal_card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        goal_card_layout.setContentsMargins(5, 5, 5, 5)
+        
+        self.goal_widget = CircularGoalWidget()
+        self.goal_widget.setToolTip("Double click card to change focus goal")
+        goal_card_layout.addWidget(self.goal_widget, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        lbl_goal_title = QLabel(Localization.get("daily_goal"))
+        lbl_goal_title.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        goal_card_layout.addWidget(lbl_goal_title, 0, Qt.AlignmentFlag.AlignCenter)
+
+        stats_cards_row.addWidget(self.card_total_time)
+        stats_cards_row.addWidget(self.card_total_pomos)
+        stats_cards_row.addWidget(self.card_goal)
+        analytics_layout.addLayout(stats_cards_row)
+
+        # Custom Bar Chart
+        chart_title = QLabel(Localization.get("last_7_days"))
+        chart_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff; margin-top: 10px;")
+        analytics_layout.addWidget(chart_title)
+
+        self.chart_widget = AnalyticsChartWidget()
+        analytics_layout.addWidget(self.chart_widget, 1)
+
+        # Second row: Heatmap (left) + Donut chart (right)
+        second_row = QHBoxLayout()
+        second_row.setSpacing(15)
+
+        # Left panel: Heatmap
+        heatmap_panel = QFrame()
+        heatmap_panel.setObjectName("sidebarPanel")
+        heatmap_panel_layout = QVBoxLayout(heatmap_panel)
+        heatmap_panel_layout.setContentsMargins(10, 10, 10, 10)
+        heatmap_panel_layout.setSpacing(6)
+        heatmap_title = QLabel("Son 12 Hafta Odaklanma Haritası")
+        heatmap_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff;")
+        heatmap_panel_layout.addWidget(heatmap_title)
+        self.heatmap_widget = HeatmapWidget()
+        heatmap_panel_layout.addWidget(self.heatmap_widget)
+        second_row.addWidget(heatmap_panel, 3)
+
+        # Right panel: Donut chart
+        donut_panel = QFrame()
+        donut_panel.setObjectName("sidebarPanel")
+        donut_panel_layout = QVBoxLayout(donut_panel)
+        donut_panel_layout.setContentsMargins(10, 10, 10, 10)
+        donut_panel_layout.setSpacing(6)
+        donut_title = QLabel("Görev Dağılımı")
+        donut_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff;")
+        donut_panel_layout.addWidget(donut_title)
+        self.donut_widget = DonutChartWidget()
+        donut_panel_layout.addWidget(self.donut_widget)
+        second_row.addWidget(donut_panel, 2)
+
+        analytics_layout.addLayout(second_row)
+
+        self.tab_widget.addTab(analytics_tab, create_vector_icon("chart"), Localization.get("analytics").replace("📈 ", ""))
+
+        # ---- Tab 3: Calendar View ----
+        calendar_tab = QWidget()
+        calendar_tab_layout = QVBoxLayout(calendar_tab)
+        calendar_tab_layout.setContentsMargins(10, 15, 10, 10)
+        calendar_tab_layout.setSpacing(8)
+
+        cal_header = QLabel("Aylık Takvim Görünümü")
+        cal_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        calendar_tab_layout.addWidget(cal_header)
+
+        self.calendar_widget = CalendarViewWidget()
+        calendar_tab_layout.addWidget(self.calendar_widget)
+
+        self.tab_widget.addTab(calendar_tab, create_vector_icon("calendar"), "Takvim")
+
+        # ---- Tab 4: Archive ----
+        archive_tab = QWidget()
+        archive_layout = QVBoxLayout(archive_tab)
+        archive_layout.setContentsMargins(10, 20, 10, 10)
+        archive_layout.setSpacing(15)
+
+        archive_lbl = QLabel(Localization.get("archive"))
+        archive_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        archive_layout.addWidget(archive_lbl)
+
+        self.archive_list = QListWidget()
+        self.archive_list.setStyleSheet("""
+            QListWidget {
+                background-color: #11131e;
+                border: 1px solid #1e293b;
+                border-radius: 12px;
+                padding: 10px;
+                font-size: 13px;
+            }
+            QListWidget::item {
+                background-color: #1e293b;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 10px;
+                margin-bottom: 6px;
+                color: #e2e8f0;
+            }
+            QListWidget::item:hover {
+                border-color: #14b8a6;
+                background-color: #162e2a;
+            }
+        """)
+        archive_layout.addWidget(self.archive_list)
+
+        archive_btns = QHBoxLayout()
+        self.btn_restore = QPushButton(Localization.get("restore"))
+        self.btn_restore.clicked.connect(self.on_restore_archived)
+
+        self.btn_perm_delete = QPushButton(Localization.get("perm_delete"))
+        self.btn_perm_delete.setObjectName("dangerBtn")
+        self.btn_perm_delete.clicked.connect(self.on_perm_delete_archived)
+
+        archive_btns.addWidget(self.btn_restore)
+        archive_btns.addStretch()
+        archive_btns.addWidget(self.btn_perm_delete)
+        archive_layout.addLayout(archive_btns)
+
+        self.tab_widget.addTab(archive_tab, create_vector_icon("archive"), Localization.get("archive").replace("📁 ", ""))
+
+        
+        main_layout.addWidget(self.tab_widget, 3)
+
+        # ==========================================
+        # RIGHT REGION: SIDEBAR (Timer & Quick Stats)
+        # ==========================================
+        sidebar_layout = QVBoxLayout()
+        sidebar_layout.setSpacing(15)
+
+        # App branding header
+        branding_frame = QFrame()
+        branding_frame.setStyleSheet("background: transparent;")
+        branding_layout = QHBoxLayout(branding_frame)
+        branding_layout.setContentsMargins(0, 0, 0, 0)
+        branding_layout.setSpacing(10)
+        
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "logo.png")
+        if os.path.exists(logo_path):
+            logo_label = QLabel()
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+            branding_layout.addWidget(logo_label)
+
+        # Title and subtitle layout
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(2)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        
+        app_title = QLabel("AuraTask")
+        app_title.setObjectName("titleLabel")
+        app_subtitle = QLabel(Localization.get("app_subtitle"))
+        app_subtitle.setObjectName("subtitleLabel")
+        
+        title_layout.addWidget(app_title)
+        title_layout.addWidget(app_subtitle)
+        
+        branding_layout.addLayout(title_layout)
+        branding_layout.addStretch()
+        
+        sidebar_layout.addWidget(branding_frame)
+
+        # Pomodoro Timer
+        self.pomodoro_widget = PomodoroWidget(self.db)
+        self.pomodoro_widget.session_completed.connect(self.on_pomodoro_completed)
+        self.pomodoro_widget.settings_changed.connect(self.refresh_stats)
+
+        sidebar_layout.addWidget(self.pomodoro_widget)
+
+        # Quick summary panel
+        summary_panel = QFrame()
+        summary_panel.setObjectName("sidebarPanel")
+        sum_layout = QVBoxLayout(summary_panel)
+        sum_layout.setSpacing(8)
+        
+        sum_title = QLabel(Localization.get("summary_stats"))
+        sum_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #f8fafc;")
+        sum_layout.addWidget(sum_title)
+
+        self.lbl_today_time = QLabel(Localization.get("today_focus", 0))
+        self.lbl_today_time.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        self.lbl_today_time.mouseDoubleClickEvent = self.on_today_time_double_clicked
+        self.lbl_today_time.setToolTip(Localization.get("double_click_to_change_today_focus"))
+        sum_layout.addWidget(self.lbl_today_time)
+
+        self.lbl_total_tasks = QLabel(Localization.get("total_tasks", 0))
+        self.lbl_total_tasks.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        sum_layout.addWidget(self.lbl_total_tasks)
+
+        sidebar_layout.addWidget(summary_panel)
+        sidebar_layout.addStretch()
+
+        # ---- Import / Export Buttons ----
+        io_panel = QFrame()
+        io_panel.setObjectName("sidebarPanel")
+        io_layout = QVBoxLayout(io_panel)
+        io_layout.setContentsMargins(10, 8, 10, 8)
+        io_layout.setSpacing(6)
+
+        io_title = QLabel("Veri Yedekleme")
+        io_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #f8fafc;")
+        io_layout.addWidget(io_title)
+
+        io_btns = QHBoxLayout()
+        io_btns.setSpacing(6)
+
+        btn_export_json = QPushButton(" JSON")
+        btn_export_json.setIcon(create_vector_icon("export", "#14b8a6", 20))
+        btn_export_json.setObjectName("secondaryBtn")
+        btn_export_json.setStyleSheet("font-size: 11px; padding: 5px 8px;")
+        btn_export_json.setToolTip("Tüm görevleri ve istatistikleri JSON olarak dışa aktar")
+        btn_export_json.clicked.connect(self.export_json)
+
+        btn_export_csv = QPushButton(" CSV")
+        btn_export_csv.setIcon(create_vector_icon("export", "#10b981", 20))
+        btn_export_csv.setObjectName("secondaryBtn")
+        btn_export_csv.setStyleSheet("font-size: 11px; padding: 5px 8px;")
+        btn_export_csv.setToolTip("Görevleri CSV olarak dışa aktar")
+        btn_export_csv.clicked.connect(self.export_csv)
+
+        btn_import = QPushButton(" İçe Al")
+        btn_import.setIcon(create_vector_icon("import", "#8b5cf6", 20))
+        btn_import.setObjectName("secondaryBtn")
+        btn_import.setStyleSheet("font-size: 11px; padding: 5px 8px;")
+        btn_import.setToolTip("JSON yedekten görevleri içe aktar")
+        btn_import.clicked.connect(self.import_json)
+
+        io_btns.addWidget(btn_export_json)
+        io_btns.addWidget(btn_export_csv)
+        io_btns.addWidget(btn_import)
+        io_layout.addLayout(io_btns)
+
+        sidebar_layout.addWidget(io_panel)
+
+        main_layout.addLayout(sidebar_layout, 1)
+
+    # ==========================================
+    # LOGIC AND EVENT HANDLERS
+    # ==========================================
+    def refresh_all(self):
+        self.refresh_columns()
+        self.refresh_stats()
+
+    def refresh_columns(self):
+        # Clear all columns
+        self.col_todo.clear_cards()
+        self.col_doing.clear_cards()
+        self.col_done.clear_cards()
+        self.archive_list.clear()
+
+        # Reload tasks
+        tasks = list(self.db.get_tasks())
+        
+        # Sort tasks
+        sort_by = self.sort_combo.currentData()
+        if sort_by == "priority":
+            prio_weights = {"high": 3, "medium": 2, "low": 1}
+            tasks.sort(key=lambda t: prio_weights.get(t.get("priority", "medium").lower(), 2), reverse=True)
+        elif sort_by == "due":
+            tasks.sort(key=lambda t: t.get("due_date", "") if t.get("due_date", "") else "9999-12-31")
+        elif sort_by == "focus":
+            tasks.sort(key=lambda t: t.get("focus_time", 0), reverse=True)
+        else: # "date"
+            tasks.sort(key=lambda t: t.get("created_at", ""))
+        
+        # Get filter values
+        filter_priority = self.filter_combo.currentData()
+        search_text = self.search_input.text().lower().strip()
+        
+        for task in tasks:
+            status = task.get("status", "todo")
+            if status == "archived":
+                item_text = f"{task.get('title', '')} ({Localization.get(task.get('priority', 'medium'))})"
+                if task.get("due_date"):
+                    item_text += f" - 📅 {task.get('due_date')}"
+                item = QListWidgetItem(item_text)
+                item.setData(Qt.ItemDataRole.UserRole, task["id"])
+                self.archive_list.addItem(item)
+                continue
+
+            # Apply priority filter
+            if filter_priority != "all" and task.get("priority", "medium").lower() != filter_priority:
+                continue
+            
+            # Apply search filter
+            if search_text:
+                title = task.get("title", "").lower()
+                desc = task.get("description", "").lower()
+                tags = " ".join(task.get("tags", [])).lower()
+                if search_text not in title and search_text not in desc and search_text not in tags:
+                    continue
+
+            if status == "todo":
+                self.col_todo.add_card(task)
+            elif status == "doing":
+                self.col_doing.add_card(task)
+            elif status == "done":
+                self.col_done.add_card(task)
+
+        # Update total tasks count in sidebar summary
+        active_tasks_count = sum(1 for t in tasks if t.get("status") != "archived")
+        self.lbl_total_tasks.setText(Localization.get("total_tasks", active_tasks_count))
+
+        # Update tasks in the Pomodoro widget dropdown
+        self.pomodoro_widget.update_tasks(tasks)
+
+        # Update Calendar view with tasks that have due dates
+        self.calendar_widget.update_tasks([t for t in tasks if t.get("due_date")])
+
+
+    def on_clear_completed(self):
+        reply = QMessageBox.question(
+            self, Localization.get("clear_completed"), 
+            Localization.get("delete_confirm"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            tasks = self.db.get_tasks()
+            to_delete = [t["id"] for t in tasks if t.get("status") == "done"]
+            for task_id in to_delete:
+                self.db.update_task_status(task_id, "archived")
+            self.refresh_columns()
+
+    def refresh_stats(self):
+        stats = self.db.get_stats()
+        
+        # Update Big Stats Cards in Tab 2
+        total_mins = stats.get("total_focus_minutes", 0)
+        self.lbl_stat_time_val.setText(f"{total_mins} " + Localization.get("min"))
+        
+        total_pomos = stats.get("completed_pomodoros", 0)
+        self.lbl_stat_pomo_val.setText(f"{total_pomos} " + Localization.get("sessions"))
+
+        # Update Chart Widget
+        sessions = stats.get("focus_sessions", [])
+        self.chart_widget.set_stats(sessions)
+
+        # Update Today's info in sidebar
+        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        today_mins = 0
+        for session in sessions:
+            if session["date"] == today_str:
+                today_mins = session["minutes"]
+                break
+        self.lbl_today_time.setText(Localization.get("today_focus", today_mins))
+        
+        # Update Daily Goal Progress Ring
+        goal_mins = stats.get("daily_goal_minutes", 100)
+        self.goal_widget.set_progress(today_mins, goal_mins)
+
+        # Update Heatmap
+        self.heatmap_widget.set_stats(sessions)
+
+        # Update Donut chart with task priority distribution (exclude archived)
+        all_tasks = self.db.get_tasks()
+        high_count   = sum(1 for t in all_tasks if t.get("priority", "medium").lower() == "high"   and t.get("status") != "archived")
+        medium_count = sum(1 for t in all_tasks if t.get("priority", "medium").lower() == "medium" and t.get("status") != "archived")
+        low_count    = sum(1 for t in all_tasks if t.get("priority", "medium").lower() == "low"    and t.get("status") != "archived")
+        self.donut_widget.set_data(high_count, medium_count, low_count)
+
+    def on_add_task(self, column_id):
+        # Open dialog
+        dlg = TaskDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            data = dlg.get_data()
+            task = self.db.add_task(
+                title=data["title"],
+                description=data["description"],
+                priority=data["priority"],
+                tags=data["tags"],
+                due_date=data["due_date"]
+            )
+            # Match the starting column status (column_id is now todo, doing, or done)
+            if column_id != "todo":
+                self.db.update_task_status(task["id"], column_id)
+                
+            self.refresh_columns()
+
+    def on_edit_task(self, task_id):
+        # Find task
+        tasks = self.db.get_tasks()
+        target_task = None
+        for task in tasks:
+            if task["id"] == task_id:
+                target_task = task
+                break
+        
+        if not target_task:
+            return
+
+        # Open dialog
+        dlg = TaskDialog(self, target_task)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            data = dlg.get_data()
+            self.db.edit_task(
+                task_id=task_id,
+                title=data["title"],
+                description=data["description"],
+                priority=data["priority"],
+                tags=data["tags"],
+                due_date=data["due_date"],
+                subtasks=data["subtasks"]
+            )
+            self.refresh_columns()
+
+    def on_delete_task(self, task_id):
+        reply = QMessageBox.question(
+            self, Localization.get("delete_title"), 
+            Localization.get("delete_confirm"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            if self.db.delete_task(task_id):
+                self.refresh_columns()
+
+    def on_move_left(self, task_id):
+        # Move state backward
+        tasks = self.db.get_tasks()
+        for task in tasks:
+            if task["id"] == task_id:
+                curr_status = task.get("status", "todo")
+                if curr_status == "doing":
+                    self.db.update_task_status(task_id, "todo")
+                elif curr_status == "done":
+                    self.db.update_task_status(task_id, "doing")
+                break
+        self.refresh_columns()
+
+    def on_move_right(self, task_id):
+        # Move state forward
+        tasks = self.db.get_tasks()
+        for task in tasks:
+            if task["id"] == task_id:
+                curr_status = task.get("status", "todo")
+                if curr_status == "todo":
+                    self.db.update_task_status(task_id, "doing")
+                elif curr_status == "doing":
+                    self.db.update_task_status(task_id, "done")
+                break
+        self.refresh_columns()
+
+    def on_pomodoro_completed(self, minutes, task_id=""):
+        self.db.add_focus_time(minutes, task_id)
+        self.refresh_stats()
+        self.refresh_columns()
+        
+        # Play fallback beep alert
+        QApplication.beep()
+        
+        # Trigger native desktop notification via System Tray
+        task_title = ""
+        if task_id:
+            tasks = self.db.get_tasks()
+            for t in tasks:
+                if t["id"] == task_id:
+                    task_title = f" ({t['title']})"
+                    break
+        self.tray_icon.showMessage(
+            Localization.get("session_finished"),
+            f"{minutes} {Localization.get('work_done_msg')}{task_title}",
+            self.tray_icon.icon(),
+            5000
+        )
+
+    def on_subtask_toggled(self, task_id, subtask_idx, is_done):
+        self.db.update_subtask_state(task_id, subtask_idx, is_done)
+        self.refresh_columns()
+
+    def on_restore_archived(self):
+        curr_item = self.archive_list.currentItem()
+        if not curr_item:
+            return
+        task_id = curr_item.data(Qt.ItemDataRole.UserRole)
+        self.db.update_task_status(task_id, "todo")
+        self.refresh_all()
+
+    def on_perm_delete_archived(self):
+        curr_item = self.archive_list.currentItem()
+        if not curr_item:
+            return
+        task_id = curr_item.data(Qt.ItemDataRole.UserRole)
+        reply = QMessageBox.question(
+            self, Localization.get("delete_title"), 
+            Localization.get("delete_confirm"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.db.delete_task(task_id)
+            self.refresh_all()
+
+    def on_goal_card_double_clicked(self, event):
+        stats = self.db.get_stats()
+        curr_goal = stats.get("daily_goal_minutes", 100)
+        new_goal, ok = QInputDialog.getInt(
+            self, Localization.get("change_goal"),
+            Localization.get("goal_minutes") + ":",
+            curr_goal, 10, 480, 10
+        )
+        if ok:
+            self.db.set_daily_goal(new_goal)
+            self.refresh_stats()
+
+    def on_total_time_card_double_clicked(self, event):
+        stats = self.db.get_stats()
+        curr_total = stats.get("total_focus_minutes", 0)
+        new_total, ok = QInputDialog.getInt(
+            self, Localization.get("change_total_focus"),
+            Localization.get("total_focus_minutes_label") + ":",
+            curr_total, 0, 999999, 10
+        )
+        if ok:
+            self.db.set_total_focus_time(new_total)
+            self.refresh_stats()
+
+    def on_today_time_double_clicked(self, event):
+        stats = self.db.get_stats()
+        sessions = stats.get("focus_sessions", [])
+        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        curr_today = 0
+        for session in sessions:
+            if session["date"] == today_str:
+                curr_today = session["minutes"]
+                break
+                
+        new_today, ok = QInputDialog.getInt(
+            self, Localization.get("change_today_focus"),
+            Localization.get("today_focus_minutes_label") + ":",
+            curr_today, 0, 999999, 10
+        )
+        if ok:
+            self.db.set_today_focus_time(new_today)
+            self.refresh_stats()
+
+    def show_and_restore(self):
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def quit_application(self):
+        self.really_quit = True
+        self.close()
+        QApplication.quit()
+
+    def on_tray_icon_activated(self, reason):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            self.show_and_restore()
+
+    def closeEvent(self, event):
+        if hasattr(self, 'really_quit') and self.really_quit:
+            event.accept()
+        elif self.tray_icon.isVisible():
+            self.hide()
+            self.tray_icon.showMessage(
+                "AuraTask",
+                Localization.get("running_in_bg_msg"),
+                self.tray_icon.icon(),
+                2000
+            )
+            event.ignore()
+        else:
+            event.accept()
+
+    # ==========================================
+    # IMPORT / EXPORT METHODS
+    # ==========================================
+    def export_json(self):
+        import json as _json
+        path, _ = QFileDialog.getSaveFileName(
+            self, "JSON Olarak Dışa Aktar", "auratask_backup.json",
+            "JSON Dosyaları (*.json)"
+        )
+        if not path:
+            return
+        try:
+            data = self.db.data
+            with open(path, "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False, indent=4)
+            QMessageBox.information(self, "Başarılı", f"Veriler başarıyla dışa aktarıldı:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Dışa aktarma başarısız:\n{str(e)}")
+
+    def export_csv(self):
+        import csv as _csv
+        path, _ = QFileDialog.getSaveFileName(
+            self, "CSV Olarak Dışa Aktar", "auratask_tasks.csv",
+            "CSV Dosyaları (*.csv)"
+        )
+        if not path:
+            return
+        try:
+            tasks = self.db.get_tasks()
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                writer = _csv.writer(f)
+                writer.writerow(["ID", "Başlık", "Açıklama", "Öncelik", "Durum",
+                                  "Etiketler", "Son Tarih", "Odak Süresi (dk)", "Oluşturma Tarihi"])
+                for t in tasks:
+                    writer.writerow([
+                        t.get("id", ""),
+                        t.get("title", ""),
+                        t.get("description", ""),
+                        t.get("priority", ""),
+                        t.get("status", ""),
+                        ", ".join(t.get("tags", [])),
+                        t.get("due_date", ""),
+                        t.get("focus_time", 0),
+                        t.get("created_at", "")
+                    ])
+            QMessageBox.information(self, "Başarılı", f"Görevler CSV olarak dışa aktarıldı:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"CSV dışa aktarma başarısız:\n{str(e)}")
+
+    def import_json(self):
+        import json as _json
+        path, _ = QFileDialog.getOpenFileName(
+            self, "JSON Yedekten İçe Aktar", "",
+            "JSON Dosyaları (*.json)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                imported = _json.load(f)
+
+            if "tasks" not in imported:
+                QMessageBox.warning(self, "Uyarı", "Geçersiz yedek dosyası: 'tasks' alanı bulunamadı.")
+                return
+
+            reply = QMessageBox.question(
+                self, "İçe Aktarma Onayı",
+                f"Bu işlem {len(imported['tasks'])} görevi ekleyecek (mevcut veriler korunur).\nDevam etmek istiyor musunuz?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            # Merge tasks - avoid duplicates by ID
+            existing_ids = {t["id"] for t in self.db.data["tasks"]}
+            added = 0
+            for task in imported["tasks"]:
+                if task.get("id") not in existing_ids:
+                    self.db.data["tasks"].append(task)
+                    added += 1
+
+            self.db.save_data()
+            self.refresh_all()
+            QMessageBox.information(self, "Başarılı", f"{added} yeni görev başarıyla içe aktarıldı.")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"İçe aktarma başarısız:\n{str(e)}")
+
+
+SINGLE_INSTANCE_KEY = "auratask_single_instance"
+
+
+class SingleInstanceApp(QApplication):
+    """Uygulama zaten çalışıyorsa mevcut pencereyi ön plana getirir,
+    aksi hâlde normal şekilde başlar."""
+
+    def __init__(self, argv):
+        super().__init__(argv)
+        self._server = None
+        self._window = None
+
+    def is_already_running(self):
+        """Çalışan bir örnek varsa ona sinyal gönderir ve True döner."""
+        socket = QLocalSocket()
+        socket.connectToServer(SINGLE_INSTANCE_KEY)
+        if socket.waitForConnected(500):
+            # Çalışan örneğe 'show' mesajı gönder
+            socket.write(b"show")
+            socket.flush()
+            socket.waitForBytesWritten(500)
+            socket.disconnectFromServer()
+            return True
+        return False
+
+    def start_server(self, window):
+        """Bu örnek birincil; IPC sunucusunu başlat."""
+        self._window = window
+        # Çakışan eski sunucu kalıntılarını temizle
+        QLocalServer.removeServer(SINGLE_INSTANCE_KEY)
+        self._server = QLocalServer(self)
+        self._server.newConnection.connect(self._on_new_connection)
+        self._server.listen(SINGLE_INSTANCE_KEY)
+
+    def _on_new_connection(self):
+        conn = self._server.nextPendingConnection()
+        conn.readyRead.connect(lambda: self._handle_message(conn))
+
+    def _handle_message(self, conn):
+        msg = conn.readAll().data()
+        conn.disconnectFromServer()
+        if b"show" in msg and self._window:
+            self._window.show_and_restore()
+
+
+def main():
+    app = SingleInstanceApp(sys.argv)
+    app.setStyleSheet(STYLE_SHEET)
+
+    # Zaten çalışıyorsa mevcut örneği ön plana getir ve çık
+    if app.is_already_running():
+        sys.exit(0)
+
+    window = MainWindow()
+    app.start_server(window)
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

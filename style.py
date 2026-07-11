@@ -28,7 +28,7 @@ QScrollBar::handle:vertical {
 }
 
 QScrollBar::handle:vertical:hover {
-    background: #4f46e5;
+    background: #14b8a6;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
@@ -37,7 +37,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 
 /* Buttons */
 QPushButton {
-    background-color: #4f46e5;
+    background-color: #14b8a6;
     border: none;
     color: #ffffff;
     padding: 8px 16px;
@@ -46,15 +46,15 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background-color: #6366f1;
+    background-color: #2dd4bf;
 }
 
 QPushButton:pressed {
-    background-color: #4338ca;
+    background-color: #0d9488;
 }
 
 QPushButton:disabled {
-    background-color: #1e1b4b;
+    background-color: #134e4a;
     color: #64748b;
 }
 
@@ -89,7 +89,7 @@ QLineEdit, QTextEdit, QComboBox {
 }
 
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
-    border: 1px solid #6366f1;
+    border: 1px solid #2dd4bf;
 }
 
 QComboBox::drop-down {
@@ -102,7 +102,7 @@ QComboBox::drop-down {
 QComboBox QAbstractItemView {
     background-color: #1e293b;
     border: 1px solid #334155;
-    selection-background-color: #4f46e5;
+    selection-background-color: #14b8a6;
     selection-color: #ffffff;
 }
 
@@ -160,8 +160,8 @@ QFrame#kanbanCard {
 }
 
 QFrame#kanbanCard:hover {
-    border: 1px solid #4f46e5;
-    background-color: #243049;
+    border: 1px solid #14b8a6;
+    background-color: #162e2a;
 }
 
 QLabel#cardTitle {
@@ -216,6 +216,10 @@ QTabWidget::pane {
     background-color: #0d0e15;
 }
 
+QTabBar {
+    outline: none;
+}
+
 QTabBar::tab {
     background-color: #11131e;
     border: 1px solid #1e293b;
@@ -226,6 +230,7 @@ QTabBar::tab {
     margin-right: 4px;
     font-weight: bold;
     color: #94a3b8;
+    outline: none;
 }
 
 QTabBar::tab:hover {
@@ -234,10 +239,12 @@ QTabBar::tab:hover {
 }
 
 QTabBar::tab:selected {
-    background-color: #4f46e5;
-    color: #ffffff;
-    border-color: #4f46e5;
+    background-color: #1e293b;
+    color: #14b8a6;
+    border-bottom: 3px solid #14b8a6;
+    border-color: #1e293b;
 }
+
 
 /* Card control buttons styling */
 QPushButton#cardBtn {

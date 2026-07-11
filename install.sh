@@ -18,7 +18,7 @@ DESKTOP_DIR="$HOME/.local/share/applications"
 DESKTOP_FILE="$DESKTOP_DIR/auratask.desktop"
 
 # Target paths in installation directory
-EXEC_PATH="$INSTALL_DIR/main.py"
+EXEC_PATH="$INSTALL_DIR/AuraTask"
 ICON_PATH="$INSTALL_DIR/data/logo.png"
 
 # Show usage help
@@ -56,7 +56,7 @@ install_app() {
     echo -e "${BLUE}[3/5] Copying application files...${NC}"
     
     # Copy main code files
-    cp "$SOURCE_DIR/main.py" "$INSTALL_DIR/"
+    cp "$SOURCE_DIR/AuraTask" "$INSTALL_DIR/"
     cp "$SOURCE_DIR/database.py" "$INSTALL_DIR/"
     cp "$SOURCE_DIR/style.py" "$INSTALL_DIR/"
     cp "$SOURCE_DIR/widgets.py" "$INSTALL_DIR/"
@@ -67,7 +67,7 @@ install_app() {
         cp "$SOURCE_DIR/data/logo.png" "$INSTALL_DIR/data/logo.png"
     fi
 
-    # Set executable permissions on target main.py
+    # Set executable permissions on target AuraTask
     chmod +x "$EXEC_PATH"
     echo -e "${GREEN}✓ Files copied and execution permissions set.${NC}"
 
@@ -79,7 +79,7 @@ install_app() {
 [Desktop Entry]
 Name=AuraTask
 Comment=Personal Focus & Task Manager
-Exec=$EXEC_PATH
+Exec=/usr/bin/python3 $EXEC_PATH
 Icon=$ICON_PATH
 Terminal=false
 Type=Application
