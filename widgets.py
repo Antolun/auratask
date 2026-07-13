@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QLinearGradient, QIcon, QPixmap, QPainterPath
 from localization import Localization
+import style as _style_mod
 
 import os
 import json as _json_mod
@@ -31,18 +32,18 @@ TAG_COLORS = [
 
 # Selectable preset colors for the tag color picker (text_color, bg_color, label)
 TAG_COLOR_PRESETS = [
-    ("#14b8a6", "#042f2e", "Turkuaz"),
-    ("#8b5cf6", "#2e1065", "Mor"),
-    ("#f59e0b", "#451a03", "Amber"),
-    ("#ef4444", "#450a0a", "Kırmızı"),
-    ("#10b981", "#052e16", "Yeşil"),
-    ("#3b82f6", "#172554", "Mavi"),
-    ("#ec4899", "#4a044e", "Pembe"),
-    ("#f97316", "#431407", "Turuncu"),
-    ("#06b6d4", "#083344", "Cyan"),
-    ("#84cc16", "#1a2e05", "Lime"),
-    ("#a855f7", "#3b0764", "Lavanta"),
-    ("#64748b", "#0f172a", "Gri"),
+    ("#14b8a6", "#042f2e", "tag_colors_preset_turkuaz"),
+    ("#8b5cf6", "#2e1065", "tag_colors_preset_mor"),
+    ("#f59e0b", "#451a03", "tag_colors_preset_amber"),
+    ("#ef4444", "#450a0a", "tag_colors_preset_kirmizi"),
+    ("#10b981", "#052e16", "tag_colors_preset_yesil"),
+    ("#3b82f6", "#172554", "tag_colors_preset_mavi"),
+    ("#ec4899", "#4a044e", "tag_colors_preset_pembe"),
+    ("#f97316", "#431407", "tag_colors_preset_turuncu"),
+    ("#06b6d4", "#083344", "tag_colors_preset_cyan"),
+    ("#84cc16", "#1a2e05", "tag_colors_preset_lime"),
+    ("#a855f7", "#3b0764", "tag_colors_preset_lavanta"),
+    ("#64748b", "#0f172a", "tag_colors_preset_gri"),
 ]
 
 _TAG_COLORS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "tag_colors.json")
@@ -348,6 +349,7 @@ class CircularGoalWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        theme = _style_mod.get_active_theme()
         width = self.width()
         height = self.height()
         size = min(width, height) - 10
@@ -357,13 +359,13 @@ class CircularGoalWidget(QWidget):
         rect = QRectF(x, y, size, size)
         
         # Background track
-        track_pen = QPen(QColor("#1e293b"))
+        track_pen = QPen(QColor(theme.card_bg))
         track_pen.setWidth(6)
         painter.setPen(track_pen)
         painter.drawEllipse(rect)
 
         # Active Progress Arc
-        progress_pen = QPen(QColor("#14b8a6"))
+        progress_pen = QPen(QColor(theme.primary))
         progress_pen.setWidth(6)
         progress_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(progress_pen)
@@ -384,7 +386,7 @@ class CircularGoalWidget(QWidget):
         # Draw stats text below percent
         font_sub = QFont("Inter", 7, QFont.Weight.Medium)
         painter.setFont(font_sub)
-        painter.setPen(QPen(QColor("#94a3b8")))
+        painter.setPen(QPen(QColor(theme.text_muted)))
         painter.drawText(QRectF(x, y + (size/2) + 2, size, 12), Qt.AlignmentFlag.AlignCenter, self.text)
 
 
@@ -397,7 +399,7 @@ class CircularTimerWidget(QWidget):
         self.progress = 1.0 # 0.0 to 1.0
         self.time_str = "25:00"
         self.is_work_session = True
-        self.setToolTip("Süreyi özelleştirmek için çift tıklayın")
+        self.setToolTip(Localization.get("timer_double_click_tooltip"))
 
     def mouseDoubleClickEvent(self, event):
         self.double_clicked.emit()
@@ -421,14 +423,16 @@ class CircularTimerWidget(QWidget):
         # Draw outer subtle glow background circle
         rect = QRectF(x, y, size, size)
         
+        theme = _style_mod.get_active_theme()
+
         # Draw background track circle
-        track_pen = QPen(QColor("#1e293b"))
+        track_pen = QPen(QColor(theme.card_bg))
         track_pen.setWidth(12)
         painter.setPen(track_pen)
         painter.drawEllipse(rect)
 
-        # Draw active progress arc
-        progress_pen_color = QColor("#14b8a6") if self.is_work_session else QColor("#10b981") # Turquoise for Work, Emerald for Break
+        # Draw active progress arc - use primary for work, a lighter variant for break
+        progress_pen_color = QColor(theme.primary) if self.is_work_session else QColor(theme.primary_hover)
         progress_pen = QPen(progress_pen_color)
         progress_pen.setWidth(12)
         progress_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -452,8 +456,7 @@ class CircularTimerWidget(QWidget):
         # Draw Mode Text below time
         mode_font = QFont("Inter", 9, QFont.Weight.Medium)
         painter.setFont(mode_font)
-        mode_color = QColor("#99f6e4") if self.is_work_session else QColor("#6ee7b7")
-        painter.setPen(QPen(mode_color))
+        painter.setPen(QPen(QColor(theme.text_muted)))
         
         mode_rect = QRectF(x, y + (size/2) + 14, size, 20)
         mode_str = Localization.get("work") if self.is_work_session else Localization.get("break")
@@ -574,24 +577,26 @@ class KanbanCardWidget(QFrame):
             
             # Progress text and bar
             prog_layout = QHBoxLayout()
-            prog_lbl = create_icon_label("board", f"{done_count}/{total_count}", "#14b8a6")
+            theme = _style_mod.get_active_theme()
+            prog_lbl = create_icon_label("board", f"{done_count}/{total_count}", theme.primary)
             prog_layout.addWidget(prog_lbl)
             
             pbar = QProgressBar()
             pbar.setMaximum(100)
             pbar.setValue(progress_percent)
             pbar.setTextVisible(False)
-            pbar.setFixedHeight(5)
-            pbar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #1e293b;
-                    border: none;
-                    border-radius: 2px;
-                }
-                QProgressBar::chunk {
-                    background-color: #14b8a6;
-                    border-radius: 2px;
-                }
+            pbar.setFixedHeight(6)
+            pbar.setStyleSheet(f"""
+                QProgressBar {{
+                    background-color: {theme.card_bg};
+                    border: 1px solid {theme.border};
+                    border-radius: 3px;
+                }}
+                QProgressBar::chunk {{
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 {theme.primary}, stop:1 {theme.primary_hover});
+                    border-radius: 3px;
+                }}
             """)
             prog_layout.addWidget(pbar, 1)
             layout.addLayout(prog_layout)
@@ -604,7 +609,7 @@ class KanbanCardWidget(QFrame):
                 chk = QCheckBox(sub["title"])
                 chk.setChecked(sub["done"])
                 chk.setStyleSheet("font-size: 11px; color: #cbd5e1;")
-                chk.setToolTip("Double click card edit button to modify titles")
+                chk.setToolTip(Localization.get("subtask_edit_card_tooltip"))
                 # Connect checkbox state change
                 chk.stateChanged.connect(lambda state, i=idx: self.subtask_toggled.emit(self.task_id, i, state == 2 or state == Qt.CheckState.Checked.value))
                 subtasks_layout.addWidget(chk)
@@ -776,7 +781,7 @@ class TagColorPickerDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.tags = tags
-        self.setWindowTitle("Etiket Renkleri")
+        self.setWindowTitle(Localization.get("tag_colors_title"))
         self.setMinimumWidth(460)
         self.setStyleSheet("""
             QDialog { background-color: #0f172a; }
@@ -789,11 +794,11 @@ class TagColorPickerDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        title_lbl = QLabel("Etiket Renkleri")
+        title_lbl = QLabel(Localization.get("tag_colors_title"))
         title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
         layout.addWidget(title_lbl)
 
-        hint = QLabel("Her etiket için bir renk seç. Değişiklikler tüm görevlere uygulanır.")
+        hint = QLabel(Localization.get("tag_colors_hint"))
         hint.setStyleSheet("font-size: 11px; color: #64748b;")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -834,7 +839,7 @@ class TagColorPickerDialog(QDialog):
             for preset_tc, preset_bc, label_p in TAG_COLOR_PRESETS:
                 swatch_btn = QPushButton()
                 swatch_btn.setFixedSize(26, 26)
-                swatch_btn.setToolTip(label_p)
+                swatch_btn.setToolTip(Localization.get(label_p))
                 swatch_btn.setStyleSheet(
                     f"background-color: {preset_tc}; border: 2px solid {preset_bc}; border-radius: 13px;"
                     " padding: 0; margin: 0;"
@@ -847,7 +852,7 @@ class TagColorPickerDialog(QDialog):
             # Reset button
             reset_btn = QPushButton("↺")
             reset_btn.setFixedSize(26, 26)
-            reset_btn.setToolTip("Varsayılan renge sıfırla")
+            reset_btn.setToolTip(Localization.get("tag_colors_reset_tooltip"))
             reset_btn.setStyleSheet(
                 "background-color: #334155; color: #94a3b8; font-size: 14px;"
                 " border: 1px solid #475569; border-radius: 13px; padding: 0;"
@@ -860,7 +865,7 @@ class TagColorPickerDialog(QDialog):
             layout.addWidget(row_frame)
 
         # Close button
-        close_btn = QPushButton("Kapat")
+        close_btn = QPushButton(Localization.get("close"))
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
@@ -954,7 +959,7 @@ class TaskDialog(QDialog):
         
         self.sub_list_widget = QListWidget()
         self.sub_list_widget.setMaximumHeight(85)
-        self.sub_list_widget.setToolTip("Double click item to delete")
+        self.sub_list_widget.setToolTip(Localization.get("subtask_edit_tooltip"))
         self.sub_list_widget.itemDoubleClicked.connect(lambda item: self.sub_list_widget.takeItem(self.sub_list_widget.row(item)))
         layout.addWidget(self.sub_list_widget)
 
@@ -989,7 +994,7 @@ class TaskDialog(QDialog):
 
         self.btn_tag_colors = QPushButton()
         self.btn_tag_colors.setIcon(create_vector_icon("tag", "#8b5cf6", 22))
-        self.btn_tag_colors.setToolTip("Etiket renklerini düzenle")
+        self.btn_tag_colors.setToolTip(Localization.get("tag_colors_edit_tooltip"))
         self.btn_tag_colors.setFixedWidth(34)
         self.btn_tag_colors.setFixedHeight(30)
         self.btn_tag_colors.setObjectName("cardBtn")
@@ -1091,8 +1096,8 @@ class TaskDialog(QDialog):
         tags_raw = self.tags_input.text().split(",")
         tags = [t.strip() for t in tags_raw if t.strip()]
         if not tags:
-            QMessageBox.information(self, "Etiket Yok",
-                "Önce etiket alanına etiket girin, sonra renk seçin.")
+            QMessageBox.information(self, Localization.get("tag_colors_no_tags_title"),
+                Localization.get("tag_colors_no_tags_msg"))
             return
         dlg = TagColorPickerDialog(tags, self)
         dlg.exec()
@@ -1164,8 +1169,10 @@ class AnalyticsChartWidget(QWidget):
         chart_w = w - left_m - right_m
         chart_h = h - top_m - bottom_m
 
+        theme = _style_mod.get_active_theme()
+
         # Draw grid lines and Y axis
-        grid_pen = QPen(QColor("#1e293b"))
+        grid_pen = QPen(QColor(theme.card_bg))
         grid_pen.setWidth(1)
         painter.setPen(grid_pen)
         
@@ -1193,7 +1200,7 @@ class AnalyticsChartWidget(QWidget):
             max_minutes = 60 # Default scale is 1 hour
 
         # Draw Y-Axis Labels
-        label_pen = QPen(QColor("#94a3b8"))
+        label_pen = QPen(QColor(theme.text_muted))
         painter.setPen(label_pen)
         font = QFont("Inter", 8, QFont.Weight.Medium)
         painter.setFont(font)
@@ -1220,10 +1227,10 @@ class AnalyticsChartWidget(QWidget):
             scaled_h = (mins / max_minutes) * chart_h
             bar_y = top_m + chart_h - scaled_h
 
-            # Draw bar with gradient
+            # Draw bar with gradient using theme primary colors
             grad = QLinearGradient(bar_x, bar_y, bar_x, top_m + chart_h)
-            grad.setColorAt(0.0, QColor("#2dd4bf")) # Turquoise top
-            grad.setColorAt(1.0, QColor("#0d9488")) # Deep teal bottom
+            grad.setColorAt(0.0, QColor(theme.primary_hover))
+            grad.setColorAt(1.0, QColor(theme.primary_pressed))
             
             painter.setBrush(QBrush(grad))
             painter.setPen(Qt.PenStyle.NoPen)
@@ -1250,12 +1257,12 @@ class AnalyticsChartWidget(QWidget):
 class HeatmapWidget(QWidget):
     """GitHub contribution graph style heatmap of focus sessions over the last 84 days."""
 
-    # Color levels based on focus minutes
-    COLOR_EMPTY  = "#1e293b"  # 0 min
-    COLOR_LOW    = "#134e4a"  # 1-30 min
-    COLOR_MED    = "#0f766e"  # 31-60 min
-    COLOR_HIGH   = "#14b8a6"  # 61-120 min
-    COLOR_MAX    = "#2dd4bf"  # 120+ min
+    # Color levels based on focus minutes - these are overridden dynamically from theme
+    COLOR_EMPTY  = "#1e293b"  # 0 min (fallback)
+    COLOR_LOW    = "#134e4a"  # 1-30 min (fallback)
+    COLOR_MED    = "#0f766e"  # 31-60 min (fallback)
+    COLOR_HIGH   = "#14b8a6"  # 61-120 min (fallback)
+    COLOR_MAX    = "#2dd4bf"  # 120+ min (fallback)
 
     CELL_SIZE = 14  # px per square
     GAP = 2         # px gap between squares
@@ -1284,16 +1291,24 @@ class HeatmapWidget(QWidget):
         self.update()
 
     def _cell_color(self, minutes):
+        theme = _style_mod.get_active_theme()
+        # Derive heatmap levels from theme primary color dynamically
+        empty_color = QColor(theme.card_bg)
+        primary_c = QColor(theme.primary)
+        pressed_c = QColor(theme.primary_pressed)
         if minutes <= 0:
-            return QColor(self.COLOR_EMPTY)
+            return empty_color
         elif minutes <= 30:
-            return QColor(self.COLOR_LOW)
+            # Very dark tint
+            c = QColor(pressed_c)
+            c.setAlpha(160)
+            return pressed_c.darker(160)
         elif minutes <= 60:
-            return QColor(self.COLOR_MED)
+            return pressed_c
         elif minutes <= 120:
-            return QColor(self.COLOR_HIGH)
+            return primary_c
         else:
-            return QColor(self.COLOR_MAX)
+            return QColor(theme.primary_hover)
 
     def _cell_rect(self, col, row, left_offset, top_offset):
         x = left_offset + col * (self.CELL_SIZE + self.GAP)
@@ -1363,7 +1378,7 @@ class HeatmapWidget(QWidget):
             if idx < len(self._days):
                 d = self._days[idx]
                 mins = self._sessions.get(d.strftime("%Y-%m-%d"), 0)
-                tooltip_text = f"{d.strftime('%d %b %Y')} — {mins} min"
+                tooltip_text = f"{d.strftime('%d %b %Y')} — {mins} {Localization.get('min')}"
                 QToolTip.showText(event.globalPosition().toPoint(), tooltip_text, self)
                 if self._hovered_cell != (col, row):
                     self._hovered_cell = (col, row)
@@ -1383,35 +1398,71 @@ class HeatmapWidget(QWidget):
 
 
 class DonutChartWidget(QWidget):
-    """Donut chart showing task distribution by priority (high/medium/low)."""
+    """Generic donut chart supporting priority-based and tag-based focus distribution."""
 
-    COLOR_HIGH   = "#ef4444"  # red
-    COLOR_MEDIUM = "#f59e0b"  # amber
-    COLOR_LOW    = "#14b8a6"  # teal
+    COLOR_HIGH   = "#ef4444"  # red (priority high)
+    COLOR_MEDIUM = "#f59e0b"  # amber (priority medium)
+    COLOR_LOW    = "#10b981"  # emerald (priority low)
     ARC_WIDTH    = 22
+
+    # Palette for tag mode (up to 8 distinct colors)
+    TAG_PALETTE = [
+        "#14b8a6", "#8b5cf6", "#f59e0b", "#ef4444",
+        "#3b82f6", "#ec4899", "#f97316", "#84cc16"
+    ]
+
+    MODE_PRIORITY = "priority"
+    MODE_TAGS     = "tags"
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(200, 180)
+        self._mode = self.MODE_PRIORITY
+        # Priority mode data
         self._high   = 0
         self._medium = 0
         self._low    = 0
+        # Tag mode data: list of (label, value, color_hex)
+        self._tag_items = []
+
+    def set_mode(self, mode):
+        """Switch between MODE_PRIORITY and MODE_TAGS."""
+        if mode in (self.MODE_PRIORITY, self.MODE_TAGS):
+            self._mode = mode
+            self.update()
 
     def set_data(self, high_count, medium_count, low_count):
-        """Update counts and repaint."""
+        """Update priority distribution counts and repaint."""
         self._high   = max(0, high_count)
         self._medium = max(0, medium_count)
         self._low    = max(0, low_count)
+        self.update()
+
+    def set_tag_data(self, tag_focus_list):
+        """Set tag-based focus data.
+        tag_focus_list: list of (tag_label, focus_minutes) sorted desc.
+        Top 5 shown, rest as 'Diğer'.
+        """
+        palette = self.TAG_PALETTE
+        items = []
+        other_total = 0
+        for i, (tag, mins) in enumerate(tag_focus_list):
+            if i < len(palette):
+                items.append((tag, mins, palette[i % len(palette)]))
+            else:
+                other_total += mins
+        if other_total > 0:
+            items.append((Localization.get("donut_other"), other_total, "#64748b"))
+        self._tag_items = items
         self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        theme = _style_mod.get_active_theme()
         w = self.width()
         h = self.height()
-
-        total = self._high + self._medium + self._low
 
         # Reserve right side for legend
         LEGEND_W  = 100
@@ -1424,22 +1475,32 @@ class DonutChartWidget(QWidget):
         cy = (h - donut_size) / 2
         donut_rect = QRectF(cx, cy, donut_size, donut_size)
 
+        # Build segments based on mode
+        if self._mode == self.MODE_PRIORITY:
+            total = self._high + self._medium + self._low
+            segments = [
+                (self._high,   QColor(self.COLOR_HIGH),   Localization.get("donut_high")),
+                (self._medium, QColor(self.COLOR_MEDIUM),  Localization.get("donut_medium")),
+                (self._low,    QColor(self.COLOR_LOW),     Localization.get("donut_low")),
+            ]
+            center_text = str(total)
+            unit_label = Localization.get("donut_tasks_unit")
+        else:
+            total = sum(v for _, v, _ in self._tag_items)
+            segments = [(v, QColor(c), lbl) for lbl, v, c in self._tag_items]
+            center_text = f"{total}"
+            unit_label = Localization.get("donut_time_unit")
+
         # Draw background track
-        track_pen = QPen(QColor("#1e293b"))
+        track_pen = QPen(QColor(theme.card_bg))
         track_pen.setWidth(self.ARC_WIDTH)
         painter.setPen(track_pen)
         painter.drawEllipse(donut_rect)
 
         # Draw segments
-        segments = [
-            (self._high,   QColor(self.COLOR_HIGH)),
-            (self._medium, QColor(self.COLOR_MEDIUM)),
-            (self._low,    QColor(self.COLOR_LOW)),
-        ]
-
         start_angle = 90 * 16  # top
         if total > 0:
-            for count, color in segments:
+            for count, color, _ in segments:
                 if count == 0:
                     continue
                 span = int(-(count / total) * 360 * 16)
@@ -1449,33 +1510,41 @@ class DonutChartWidget(QWidget):
                 painter.setPen(pen)
                 painter.drawArc(donut_rect, start_angle, span)
                 start_angle += span
+        else:
+            # Draw empty placeholder arc
+            pen = QPen(QColor(theme.border))
+            pen.setWidth(self.ARC_WIDTH)
+            painter.setPen(pen)
+            painter.drawArc(donut_rect, 90*16, -360*16)
 
         # Center text
         painter.setPen(QPen(QColor("#ffffff")))
-        font_big = QFont("Inter", 16, QFont.Weight.Bold)
+        font_big = QFont("Inter", 14, QFont.Weight.Bold)
         painter.setFont(font_big)
-        painter.drawText(donut_rect, Qt.AlignmentFlag.AlignCenter, str(total))
+        painter.drawText(donut_rect.adjusted(0, -8, 0, -8), Qt.AlignmentFlag.AlignCenter, center_text)
+        font_small = QFont("Inter", 8)
+        painter.setFont(font_small)
+        painter.setPen(QPen(QColor(theme.text_muted)))
+        painter.drawText(donut_rect.adjusted(0, 12, 0, 12), Qt.AlignmentFlag.AlignCenter, unit_label)
 
         # Legend
         legend_x = donut_area_w + 8
-        legend_y = cy + 20
-        legend_items = [
-            (QColor(self.COLOR_HIGH),   "Yüksek", self._high),
-            (QColor(self.COLOR_MEDIUM), "Orta",   self._medium),
-            (QColor(self.COLOR_LOW),    "Düşük",  self._low),
-        ]
+        legend_y = cy + 10
         legend_font = QFont("Inter", 9, QFont.Weight.Medium)
         painter.setFont(legend_font)
 
-        for lcolor, ltext, lcount in legend_items:
+        for count, lcolor, ltext in segments:
+            if legend_y + 22 > h:
+                break
             # Colored circle
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(lcolor))
             painter.drawEllipse(QRectF(legend_x, legend_y, 10, 10))
             # Label
-            painter.setPen(QPen(QColor("#cbd5e1")))
-            painter.drawText(int(legend_x + 15), int(legend_y + 10), f"{ltext}: {lcount}")
-            legend_y += 30
+            painter.setPen(QPen(QColor(theme.text_main)))
+            display = ltext if len(ltext) <= 10 else ltext[:9]+"…"
+            painter.drawText(int(legend_x + 14), int(legend_y + 10), f"{display}: {count}")
+            legend_y += 26
 
 
 
@@ -1483,7 +1552,7 @@ class PomodoroSettingsDialog(QDialog):
     def __init__(self, work, short_break, long_break, daily_goal, parent=None):
         super().__init__(parent)
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
-        self.setWindowTitle("Zamanlayıcı Ayarları")
+        self.setWindowTitle(Localization.get("timer_settings_title"))
         self.resize(320, 280)
         self.setStyleSheet("""
             QDialog { background-color: #0f172a; }
@@ -1494,41 +1563,41 @@ class PomodoroSettingsDialog(QDialog):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
         
-        title = QLabel("Süre ve Hedef Ayarları")
+        title = QLabel(Localization.get("timer_settings_header"))
         title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(title)
         
         # Work minutes input
-        layout.addWidget(QLabel("Çalışma Süresi (Dakika):"))
+        layout.addWidget(QLabel(Localization.get("timer_work_label")))
         self.work_input = QLineEdit()
         self.work_input.setText(str(work))
         layout.addWidget(self.work_input)
         
         # Short break minutes input
-        layout.addWidget(QLabel("Kısa Mola Süresi (Dakika):"))
+        layout.addWidget(QLabel(Localization.get("timer_short_break_label")))
         self.break_input = QLineEdit()
         self.break_input.setText(str(short_break))
         layout.addWidget(self.break_input)
 
         # Long break minutes input
-        layout.addWidget(QLabel("Uzun Mola Süresi (Dakika):"))
+        layout.addWidget(QLabel(Localization.get("timer_long_break_label")))
         self.long_break_input = QLineEdit()
         self.long_break_input.setText(str(long_break))
         layout.addWidget(self.long_break_input)
 
         # Daily goal input
-        layout.addWidget(QLabel("Günlük Hedef Odaklanma (Dakika):"))
+        layout.addWidget(QLabel(Localization.get("timer_daily_goal_label")))
         self.goal_input = QLineEdit()
         self.goal_input.setText(str(daily_goal))
         layout.addWidget(self.goal_input)
         
         # Buttons
         btn_layout = QHBoxLayout()
-        self.btn_cancel = QPushButton("İptal")
+        self.btn_cancel = QPushButton(Localization.get("cancel"))
         self.btn_cancel.setObjectName("secondaryBtn")
         self.btn_cancel.clicked.connect(self.reject)
         
-        self.btn_save = QPushButton("Kaydet")
+        self.btn_save = QPushButton(Localization.get("save"))
         self.btn_save.clicked.connect(self.validate_and_save)
         
         btn_layout.addWidget(self.btn_cancel)
@@ -1546,7 +1615,7 @@ class PomodoroSettingsDialog(QDialog):
                 raise ValueError()
             self.accept()
         except ValueError:
-            QMessageBox.warning(self, "Hata", "Lütfen tüm alanlara pozitif tamsayı değerler girin.")
+            QMessageBox.warning(self, Localization.get("export_error_title"), Localization.get("timer_validation_error"))
             
     def get_values(self):
         return (
@@ -1607,7 +1676,7 @@ class PomodoroWidget(QFrame):
         self.btn_settings.setIcon(create_vector_icon("settings", "#94a3b8", 18))
         self.btn_settings.setFixedSize(24, 24)
         self.btn_settings.setStyleSheet("background: transparent; border: none; padding: 0;")
-        self.btn_settings.setToolTip("Zamanlayıcı Sürelerini Ayarla")
+        self.btn_settings.setToolTip(Localization.get("timer_settings_tooltip"))
         self.btn_settings.clicked.connect(self.open_settings)
         title_layout.addWidget(self.btn_settings)
         layout.addLayout(title_layout)
@@ -1658,17 +1727,17 @@ class PomodoroWidget(QFrame):
         adj_layout = QHBoxLayout()
         adj_layout.setSpacing(6)
         
-        self.btn_25min = QPushButton(f"{self.work_minutes}dk Çalış")
+        self.btn_25min = QPushButton(Localization.get("work_btn", self.work_minutes))
         self.btn_25min.setObjectName("secondaryBtn")
         self.btn_25min.setStyleSheet("font-size: 11px; padding: 5px;")
         self.btn_25min.clicked.connect(lambda: self.set_duration(self.work_minutes, True))
 
-        self.btn_5min = QPushButton(f"{self.break_minutes}dk Mola")
+        self.btn_5min = QPushButton(Localization.get("break_short_btn", self.break_minutes))
         self.btn_5min.setObjectName("secondaryBtn")
         self.btn_5min.setStyleSheet("font-size: 11px; padding: 5px;")
         self.btn_5min.clicked.connect(lambda: self.set_duration(self.break_minutes, False))
 
-        self.btn_15min = QPushButton(f"{self.long_break_minutes}dk Mola")
+        self.btn_15min = QPushButton(Localization.get("break_long_btn", self.long_break_minutes))
         self.btn_15min.setObjectName("secondaryBtn")
         self.btn_15min.setStyleSheet("font-size: 11px; padding: 5px;")
         self.btn_15min.clicked.connect(lambda: self.set_duration(self.long_break_minutes, False))
@@ -1686,8 +1755,8 @@ class PomodoroWidget(QFrame):
         """Allow setting custom focus duration on double click."""
         curr_mins = self.timer_seconds // 60
         new_mins, ok = QInputDialog.getInt(
-            self, "Süreyi Özelleştir",
-            "Odaklanma/Mola süresi (dakika):",
+            self, Localization.get("timer_customize_title"),
+            Localization.get("timer_customize_label"),
             curr_mins, 1, 300, 1
         )
         if ok:
@@ -1707,9 +1776,9 @@ class PomodoroWidget(QFrame):
                 self.db.set_pomodoro_settings(w, b, lb)
                 self.db.set_daily_goal(g)
                 
-            self.btn_25min.setText(f"{self.work_minutes}dk Çalış")
-            self.btn_5min.setText(f"{self.break_minutes}dk Mola")
-            self.btn_15min.setText(f"{self.long_break_minutes}dk Mola")
+            self.btn_25min.setText(Localization.get("work_btn", self.work_minutes))
+            self.btn_5min.setText(Localization.get("break_short_btn", self.break_minutes))
+            self.btn_15min.setText(Localization.get("break_long_btn", self.long_break_minutes))
             
             self.set_duration(self.work_minutes, True)
             self.settings_changed.emit()
@@ -1888,12 +1957,11 @@ class CalendarViewWidget(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        month_names = ["Ocak", "\u015eubat", "Mart", "Nisan", "May\u0131s", "Haziran",
-                       "Temmuz", "A\u011fustos", "Eyl\u00fcl", "Ekim", "Kas\u0131m", "Aral\u0131k"]
+        month_names = Localization.get("month_names").split(",")
         self.lbl_month.setText(f"{month_names[self.current_month - 1]} {self.current_year}")
 
         # Day headers
-        day_names = ["Pzt", "Sal", "\u00c7ar", "Per", "Cum", "Cmt", "Paz"]
+        day_names = Localization.get("day_names").split(",")
         for col, day_name in enumerate(day_names):
             lbl = QLabel(day_name)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)

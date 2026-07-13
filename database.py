@@ -21,10 +21,11 @@ class Database:
                 "total_focus_minutes": 0,
                 "completed_pomodoros": 0,
                 "focus_sessions": [],  # List of {"date": "YYYY-MM-DD", "minutes": X}
-                "daily_goal_minutes": 100,
-                "pomodoro_work_minutes": 25,
-                "pomodoro_break_minutes": 5,
-                "pomodoro_long_break_minutes": 15
+                "daily_goal_minutes": 60,
+                "pomodoro_work_minutes": 15,
+                "pomodoro_break_minutes": 10,
+                "pomodoro_long_break_minutes": 30,
+                "theme": "default"
             }
         }
 
@@ -50,6 +51,8 @@ class Database:
                     data["stats"]["pomodoro_break_minutes"] = 5
                 if "pomodoro_long_break_minutes" not in data["stats"]:
                     data["stats"]["pomodoro_long_break_minutes"] = 15
+                if "theme" not in data["stats"]:
+                    data["stats"]["theme"] = "default"
                 return data
 
         except Exception as e:
@@ -161,6 +164,11 @@ class Database:
         stats["pomodoro_work_minutes"] = work
         stats["pomodoro_break_minutes"] = break_val
         stats["pomodoro_long_break_minutes"] = long_break
+        self.save_data()
+
+    def set_theme(self, theme_name):
+        stats = self.data["stats"]
+        stats["theme"] = theme_name
         self.save_data()
 
 

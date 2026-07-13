@@ -7,14 +7,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QTabWidget, QLabel, QFrame, QMessageBox,
     QLineEdit, QComboBox, QDialog, QSystemTrayIcon, QInputDialog,
     QListWidget, QListWidgetItem, QStyle, QPushButton, QMenu,
-    QFileDialog
+    QFileDialog, QScrollArea
 )
-from PyQt6.QtGui import QIcon, QColor, QPixmap
+from PyQt6.QtGui import QIcon, QColor, QPixmap, QKeySequence
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QShortcut
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
 from database import Database
-from style import STYLE_SHEET
+import style as _style_mod
+from style import get_stylesheet, set_active_theme, THEMES
 from widgets import (
     KanbanColumnWidget, PomodoroWidget, 
     TaskDialog, AnalyticsChartWidget, CircularGoalWidget,
@@ -27,6 +29,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.db = Database()
+        
+        # Load and apply saved theme before drawing anything
+        saved_theme = self.db.get_stats().get("theme", "default")
+        set_active_theme(saved_theme)
         
         self.setWindowTitle(Localization.get("app_title"))
         self.setMinimumSize(1150, 750)
@@ -59,6 +65,7 @@ class MainWindow(QMainWindow):
         self.really_quit = False
         
         self.init_ui()
+        self._setup_shortcuts()
         self.refresh_all()
 
     def init_ui(self):
@@ -198,7 +205,7 @@ class MainWindow(QMainWindow):
         goal_card_layout.setContentsMargins(5, 5, 5, 5)
         
         self.goal_widget = CircularGoalWidget()
-        self.goal_widget.setToolTip("Double click card to change focus goal")
+        self.goal_widget.setToolTip(Localization.get("timer_double_click_tooltip"))
         goal_card_layout.addWidget(self.goal_widget, 0, Qt.AlignmentFlag.AlignCenter)
         
         lbl_goal_title = QLabel(Localization.get("daily_goal"))
@@ -228,7 +235,7 @@ class MainWindow(QMainWindow):
         heatmap_panel_layout = QVBoxLayout(heatmap_panel)
         heatmap_panel_layout.setContentsMargins(10, 10, 10, 10)
         heatmap_panel_layout.setSpacing(6)
-        heatmap_title = QLabel("Son 12 Hafta Odaklanma Haritası")
+        heatmap_title = QLabel(Localization.get("heatmap_title"))
         heatmap_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff;")
         heatmap_panel_layout.addWidget(heatmap_title)
         self.heatmap_widget = HeatmapWidget()
@@ -241,9 +248,22 @@ class MainWindow(QMainWindow):
         donut_panel_layout = QVBoxLayout(donut_panel)
         donut_panel_layout.setContentsMargins(10, 10, 10, 10)
         donut_panel_layout.setSpacing(6)
-        donut_title = QLabel("Görev Dağılımı")
-        donut_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff;")
-        donut_panel_layout.addWidget(donut_title)
+
+        # Donut header row with mode toggle
+        donut_header_row = QHBoxLayout()
+        self.donut_title_lbl = QLabel(Localization.get("donut_title"))
+        self.donut_title_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff;")
+        donut_header_row.addWidget(self.donut_title_lbl)
+        donut_header_row.addStretch()
+
+        self.donut_mode_combo = QComboBox()
+        self.donut_mode_combo.setStyleSheet("max-width: 110px; font-size: 10px; padding: 2px 6px;")
+        self.donut_mode_combo.addItem(Localization.get("donut_priority"), "priority")
+        self.donut_mode_combo.addItem(Localization.get("donut_tag"), "tags")
+        self.donut_mode_combo.currentIndexChanged.connect(self._on_donut_mode_changed)
+        donut_header_row.addWidget(self.donut_mode_combo)
+
+        donut_panel_layout.addLayout(donut_header_row)
         self.donut_widget = DonutChartWidget()
         donut_panel_layout.addWidget(self.donut_widget)
         second_row.addWidget(donut_panel, 2)
@@ -258,14 +278,14 @@ class MainWindow(QMainWindow):
         calendar_tab_layout.setContentsMargins(10, 15, 10, 10)
         calendar_tab_layout.setSpacing(8)
 
-        cal_header = QLabel("Aylık Takvim Görünümü")
+        cal_header = QLabel(Localization.get("calendar_header"))
         cal_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
         calendar_tab_layout.addWidget(cal_header)
 
         self.calendar_widget = CalendarViewWidget()
         calendar_tab_layout.addWidget(self.calendar_widget)
 
-        self.tab_widget.addTab(calendar_tab, create_vector_icon("calendar"), "Takvim")
+        self.tab_widget.addTab(calendar_tab, create_vector_icon("calendar"), Localization.get("calendar_tab"))
 
         # ---- Tab 4: Archive ----
         archive_tab = QWidget()
@@ -316,7 +336,114 @@ class MainWindow(QMainWindow):
 
         self.tab_widget.addTab(archive_tab, create_vector_icon("archive"), Localization.get("archive").replace("📁 ", ""))
 
-        
+        # ---- Tab 5: Settings ----
+        settings_tab = QWidget()
+        settings_scroll = QScrollArea()
+        settings_scroll.setWidgetResizable(True)
+        settings_scroll.setStyleSheet("background: transparent; border: none;")
+        settings_inner = QWidget()
+        settings_layout = QVBoxLayout(settings_inner)
+        settings_layout.setContentsMargins(20, 20, 20, 20)
+        settings_layout.setSpacing(20)
+
+        settings_header = QLabel(Localization.get("settings_header"))
+        settings_header.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff; margin-bottom: 4px;")
+        settings_layout.addWidget(settings_header)
+
+        # ---- Theme Section ----
+        theme_section = QFrame()
+        theme_section.setObjectName("sidebarPanel")
+        theme_section_layout = QVBoxLayout(theme_section)
+        theme_section_layout.setContentsMargins(16, 14, 16, 14)
+        theme_section_layout.setSpacing(10)
+
+        theme_sec_title = QLabel(Localization.get("theme_section_title"))
+        theme_sec_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #f8fafc;")
+        theme_section_layout.addWidget(theme_sec_title)
+
+        theme_sec_desc = QLabel(Localization.get("theme_section_desc"))
+        theme_sec_desc.setStyleSheet("font-size: 11px; color: #64748b;")
+        theme_sec_desc.setWordWrap(True)
+        theme_section_layout.addWidget(theme_sec_desc)
+
+        theme_sec_row = QHBoxLayout()
+        theme_sec_row.setSpacing(8)
+        self.theme_combo = QComboBox()
+        self.theme_combo.setStyleSheet("font-size: 12px; padding: 6px 10px;")
+        for key, theme_obj in THEMES.items():
+            self.theme_combo.addItem(Localization.get(f"theme_{key}"), key)
+        saved_idx = self.theme_combo.findData(_style_mod.current_theme_name)
+        if saved_idx >= 0:
+            self.theme_combo.setCurrentIndex(saved_idx)
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        theme_sec_row.addWidget(self.theme_combo, 1)
+
+        btn_shortcuts = QPushButton(Localization.get("shortcuts_btn"))
+        btn_shortcuts.setObjectName("secondaryBtn")
+        btn_shortcuts.setStyleSheet("font-size: 12px; padding: 6px 12px;")
+        btn_shortcuts.setToolTip(Localization.get("shortcuts_tooltip"))
+        btn_shortcuts.clicked.connect(self._show_shortcuts_dialog)
+        theme_sec_row.addWidget(btn_shortcuts)
+        theme_section_layout.addLayout(theme_sec_row)
+
+        settings_layout.addWidget(theme_section)
+
+        # ---- Data Backup Section ----
+        backup_section = QFrame()
+        backup_section.setObjectName("sidebarPanel")
+        backup_section_layout = QVBoxLayout(backup_section)
+        backup_section_layout.setContentsMargins(16, 14, 16, 14)
+        backup_section_layout.setSpacing(10)
+
+        backup_sec_title = QLabel(Localization.get("backup_section_title"))
+        backup_sec_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #f8fafc;")
+        backup_section_layout.addWidget(backup_sec_title)
+
+        backup_sec_desc = QLabel(Localization.get("backup_section_desc"))
+        backup_sec_desc.setStyleSheet("font-size: 11px; color: #64748b;")
+        backup_sec_desc.setWordWrap(True)
+        backup_section_layout.addWidget(backup_sec_desc)
+
+        backup_btns = QHBoxLayout()
+        backup_btns.setSpacing(10)
+
+        btn_export_json = QPushButton(Localization.get("btn_export_json"))
+        btn_export_json.setIcon(create_vector_icon("export", "#14b8a6", 20))
+        btn_export_json.setObjectName("secondaryBtn")
+        btn_export_json.setStyleSheet("font-size: 12px; padding: 8px 14px;")
+        btn_export_json.setToolTip(Localization.get("tooltip_export_json"))
+        btn_export_json.clicked.connect(self.export_json)
+
+        btn_export_csv = QPushButton(Localization.get("btn_export_csv"))
+        btn_export_csv.setIcon(create_vector_icon("export", "#10b981", 20))
+        btn_export_csv.setObjectName("secondaryBtn")
+        btn_export_csv.setStyleSheet("font-size: 12px; padding: 8px 14px;")
+        btn_export_csv.setToolTip(Localization.get("tooltip_export_csv"))
+        btn_export_csv.clicked.connect(self.export_csv)
+
+        btn_import = QPushButton(Localization.get("btn_import_json"))
+        btn_import.setIcon(create_vector_icon("import", "#8b5cf6", 20))
+        btn_import.setObjectName("secondaryBtn")
+        btn_import.setStyleSheet("font-size: 12px; padding: 8px 14px;")
+        btn_import.setToolTip(Localization.get("tooltip_import_json"))
+        btn_import.clicked.connect(self.import_json)
+
+        backup_btns.addWidget(btn_export_json)
+        backup_btns.addWidget(btn_export_csv)
+        backup_btns.addWidget(btn_import)
+        backup_btns.addStretch()
+        backup_section_layout.addLayout(backup_btns)
+
+        settings_layout.addWidget(backup_section)
+        settings_layout.addStretch()
+
+        settings_scroll.setWidget(settings_inner)
+        settings_tab_layout = QVBoxLayout(settings_tab)
+        settings_tab_layout.setContentsMargins(0, 0, 0, 0)
+        settings_tab_layout.addWidget(settings_scroll)
+
+        self.tab_widget.addTab(settings_tab, create_vector_icon("settings"), Localization.get("settings_tab"))
+
         main_layout.addWidget(self.tab_widget, 3)
 
         # ==========================================
@@ -387,48 +514,6 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addWidget(summary_panel)
         sidebar_layout.addStretch()
-
-        # ---- Import / Export Buttons ----
-        io_panel = QFrame()
-        io_panel.setObjectName("sidebarPanel")
-        io_layout = QVBoxLayout(io_panel)
-        io_layout.setContentsMargins(10, 8, 10, 8)
-        io_layout.setSpacing(6)
-
-        io_title = QLabel("Veri Yedekleme")
-        io_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #f8fafc;")
-        io_layout.addWidget(io_title)
-
-        io_btns = QHBoxLayout()
-        io_btns.setSpacing(6)
-
-        btn_export_json = QPushButton(" JSON")
-        btn_export_json.setIcon(create_vector_icon("export", "#14b8a6", 20))
-        btn_export_json.setObjectName("secondaryBtn")
-        btn_export_json.setStyleSheet("font-size: 11px; padding: 5px 8px;")
-        btn_export_json.setToolTip("Tüm görevleri ve istatistikleri JSON olarak dışa aktar")
-        btn_export_json.clicked.connect(self.export_json)
-
-        btn_export_csv = QPushButton(" CSV")
-        btn_export_csv.setIcon(create_vector_icon("export", "#10b981", 20))
-        btn_export_csv.setObjectName("secondaryBtn")
-        btn_export_csv.setStyleSheet("font-size: 11px; padding: 5px 8px;")
-        btn_export_csv.setToolTip("Görevleri CSV olarak dışa aktar")
-        btn_export_csv.clicked.connect(self.export_csv)
-
-        btn_import = QPushButton(" İçe Al")
-        btn_import.setIcon(create_vector_icon("import", "#8b5cf6", 20))
-        btn_import.setObjectName("secondaryBtn")
-        btn_import.setStyleSheet("font-size: 11px; padding: 5px 8px;")
-        btn_import.setToolTip("JSON yedekten görevleri içe aktar")
-        btn_import.clicked.connect(self.import_json)
-
-        io_btns.addWidget(btn_export_json)
-        io_btns.addWidget(btn_export_csv)
-        io_btns.addWidget(btn_import)
-        io_layout.addLayout(io_btns)
-
-        sidebar_layout.addWidget(io_panel)
 
         main_layout.addLayout(sidebar_layout, 1)
 
@@ -550,12 +635,22 @@ class MainWindow(QMainWindow):
         # Update Heatmap
         self.heatmap_widget.set_stats(sessions)
 
-        # Update Donut chart with task priority distribution (exclude archived)
+        # Update Donut chart
         all_tasks = self.db.get_tasks()
         high_count   = sum(1 for t in all_tasks if t.get("priority", "medium").lower() == "high"   and t.get("status") != "archived")
         medium_count = sum(1 for t in all_tasks if t.get("priority", "medium").lower() == "medium" and t.get("status") != "archived")
         low_count    = sum(1 for t in all_tasks if t.get("priority", "medium").lower() == "low"    and t.get("status") != "archived")
         self.donut_widget.set_data(high_count, medium_count, low_count)
+
+        # Compute tag-based focus data
+        tag_focus = {}
+        for t in all_tasks:
+            task_mins = t.get("focus_time", 0)
+            if task_mins > 0:
+                for tag in t.get("tags", []):
+                    tag_focus[tag] = tag_focus.get(tag, 0) + task_mins
+        tag_focus_sorted = sorted(tag_focus.items(), key=lambda x: x[1], reverse=True)
+        self.donut_widget.set_tag_data(tag_focus_sorted)
 
     def on_add_task(self, column_id):
         # Open dialog
@@ -732,6 +827,119 @@ class MainWindow(QMainWindow):
             self.db.set_today_focus_time(new_today)
             self.refresh_stats()
 
+    # ==========================================
+    # SHORTCUTS, THEME, DONUT MODE
+    # ==========================================
+    def _setup_shortcuts(self):
+        """Register global keyboard shortcuts for the main window."""
+        # Space -> toggle Pomodoro start/pause (only when no text widget focused)
+        self._sc_space = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
+        self._sc_space.setContext(Qt.ShortcutContext.WindowShortcut)
+        self._sc_space.activated.connect(self._shortcut_toggle_timer)
+
+        # Ctrl+N -> Add new task
+        self._sc_new = QShortcut(QKeySequence("Ctrl+N"), self)
+        self._sc_new.activated.connect(lambda: self.on_add_task("todo"))
+
+        # Ctrl+1..5 -> Switch tabs
+        for i in range(1, 6):
+            sc = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
+            sc.activated.connect(lambda idx=i-1: self.tab_widget.setCurrentIndex(idx))
+
+        # Ctrl+Alt+C -> Archive done tasks
+        self._sc_archive = QShortcut(QKeySequence("Ctrl+Alt+C"), self)
+        self._sc_archive.activated.connect(self.on_clear_completed)
+
+    def _shortcut_toggle_timer(self):
+        """Space toggles Pomodoro start/pause if no text input is focused."""
+        from PyQt6.QtWidgets import QLineEdit, QTextEdit
+        focused = QApplication.focusWidget()
+        if isinstance(focused, (QLineEdit, QTextEdit)):
+            return  # Don't steal space from text fields
+        pw = self.pomodoro_widget
+        if pw.is_running:
+            pw.pause_timer()
+        else:
+            pw.start_timer()
+
+    def _on_theme_changed(self, index):
+        """Apply and persist the newly selected theme."""
+        theme_key = self.theme_combo.currentData()
+        if not theme_key:
+            return
+        set_active_theme(theme_key)
+        self.db.set_theme(theme_key)
+        # Re-apply stylesheet to the application
+        QApplication.instance().setStyleSheet(get_stylesheet())
+        # Force repaint of all custom-painted widgets
+        self.refresh_stats()
+        self.refresh_columns()
+
+    def _on_donut_mode_changed(self, index):
+        """Switch DonutChartWidget between priority and tag-focus modes."""
+        mode = self.donut_mode_combo.currentData()
+        if mode == "tags":
+            self.donut_title_lbl.setText(Localization.get("donut_tag_focus"))
+            self.donut_widget.set_mode("tags")
+        else:
+            self.donut_title_lbl.setText(Localization.get("donut_task_dist"))
+            self.donut_widget.set_mode("priority")
+
+    def _show_shortcuts_dialog(self):
+        """Show a styled dialog listing all keyboard shortcuts."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(Localization.get("shortcuts_dialog_title"))
+        dlg.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        dlg.resize(380, 280)
+        dlg.setStyleSheet("""
+            QDialog { background-color: #0d0e15; border: 1px solid #334155; border-radius: 12px; }
+            QLabel  { color: #e2e8f0; }
+        """)
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(8)
+
+        title = QLabel(Localization.get("shortcuts_dialog_header"))
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(title)
+
+        shortcuts = [
+            ("Space",          Localization.get("shortcut_space")),
+            ("Ctrl + N",       Localization.get("shortcut_ctrl_n")),
+            ("Ctrl + 1",       Localization.get("shortcut_ctrl_1")),
+            ("Ctrl + 2",       Localization.get("shortcut_ctrl_2")),
+            ("Ctrl + 3",       Localization.get("shortcut_ctrl_3")),
+            ("Ctrl + 4",       Localization.get("shortcut_ctrl_4")),
+            ("Ctrl + 5",       Localization.get("shortcut_ctrl_5")),
+            ("Ctrl + Alt + C", Localization.get("shortcut_ctrl_alt_c")),
+        ]
+
+        for key, desc in shortcuts:
+            row = QFrame()
+            row.setStyleSheet("background: #1e293b; border-radius: 6px; padding: 0px;")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(10, 6, 10, 6)
+
+            key_lbl = QLabel(key)
+            key_lbl.setStyleSheet(
+                "font-family: monospace; font-size: 11px; font-weight: bold; "
+                "color: #14b8a6; background: #0d1117; border: 1px solid #334155; "
+                "border-radius: 4px; padding: 2px 6px;"
+            )
+            key_lbl.setFixedWidth(140)
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet("color: #cbd5e1; font-size: 12px;")
+
+            row_layout.addWidget(key_lbl)
+            row_layout.addWidget(desc_lbl)
+            layout.addWidget(row)
+
+        layout.addStretch()
+        close_btn = QPushButton(Localization.get("close"))
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
     def show_and_restore(self):
         self.show()
         self.raise_()
@@ -752,7 +960,7 @@ class MainWindow(QMainWindow):
         elif self.tray_icon.isVisible():
             self.hide()
             self.tray_icon.showMessage(
-                "AuraTask",
+                Localization.get("app_title"),
                 Localization.get("running_in_bg_msg"),
                 self.tray_icon.icon(),
                 2000
@@ -767,8 +975,8 @@ class MainWindow(QMainWindow):
     def export_json(self):
         import json as _json
         path, _ = QFileDialog.getSaveFileName(
-            self, "JSON Olarak Dışa Aktar", "auratask_backup.json",
-            "JSON Dosyaları (*.json)"
+            self, Localization.get("export_json_dialog_title"), "auratask_backup.json",
+            Localization.get("export_json_filter")
         )
         if not path:
             return
@@ -776,15 +984,15 @@ class MainWindow(QMainWindow):
             data = self.db.data
             with open(path, "w", encoding="utf-8") as f:
                 _json.dump(data, f, ensure_ascii=False, indent=4)
-            QMessageBox.information(self, "Başarılı", f"Veriler başarıyla dışa aktarıldı:\n{path}")
+            QMessageBox.information(self, Localization.get("export_success_title"), Localization.get("export_json_success", path))
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Dışa aktarma başarısız:\n{str(e)}")
+            QMessageBox.critical(self, Localization.get("export_error_title"), Localization.get("export_json_error", str(e)))
 
     def export_csv(self):
         import csv as _csv
         path, _ = QFileDialog.getSaveFileName(
-            self, "CSV Olarak Dışa Aktar", "auratask_tasks.csv",
-            "CSV Dosyaları (*.csv)"
+            self, Localization.get("export_csv_dialog_title"), "auratask_tasks.csv",
+            Localization.get("export_csv_filter")
         )
         if not path:
             return
@@ -792,8 +1000,17 @@ class MainWindow(QMainWindow):
             tasks = self.db.get_tasks()
             with open(path, "w", encoding="utf-8", newline="") as f:
                 writer = _csv.writer(f)
-                writer.writerow(["ID", "Başlık", "Açıklama", "Öncelik", "Durum",
-                                  "Etiketler", "Son Tarih", "Odak Süresi (dk)", "Oluşturma Tarihi"])
+                writer.writerow([
+                    Localization.get("csv_header_id"),
+                    Localization.get("csv_header_title"),
+                    Localization.get("csv_header_desc"),
+                    Localization.get("csv_header_priority"),
+                    Localization.get("csv_header_status"),
+                    Localization.get("csv_header_tags"),
+                    Localization.get("csv_header_due"),
+                    Localization.get("csv_header_focus"),
+                    Localization.get("csv_header_created")
+                ])
                 for t in tasks:
                     writer.writerow([
                         t.get("id", ""),
@@ -806,15 +1023,15 @@ class MainWindow(QMainWindow):
                         t.get("focus_time", 0),
                         t.get("created_at", "")
                     ])
-            QMessageBox.information(self, "Başarılı", f"Görevler CSV olarak dışa aktarıldı:\n{path}")
+            QMessageBox.information(self, Localization.get("export_success_title"), Localization.get("export_csv_success", path))
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"CSV dışa aktarma başarısız:\n{str(e)}")
+            QMessageBox.critical(self, Localization.get("export_error_title"), Localization.get("export_csv_error", str(e)))
 
     def import_json(self):
         import json as _json
         path, _ = QFileDialog.getOpenFileName(
-            self, "JSON Yedekten İçe Aktar", "",
-            "JSON Dosyaları (*.json)"
+            self, Localization.get("import_json_dialog_title"), "",
+            Localization.get("import_json_filter")
         )
         if not path:
             return
@@ -823,12 +1040,12 @@ class MainWindow(QMainWindow):
                 imported = _json.load(f)
 
             if "tasks" not in imported:
-                QMessageBox.warning(self, "Uyarı", "Geçersiz yedek dosyası: 'tasks' alanı bulunamadı.")
+                QMessageBox.warning(self, Localization.get("warning"), Localization.get("import_invalid_warning"))
                 return
 
             reply = QMessageBox.question(
-                self, "İçe Aktarma Onayı",
-                f"Bu işlem {len(imported['tasks'])} görevi ekleyecek (mevcut veriler korunur).\nDevam etmek istiyor musunuz?",
+                self, Localization.get("import_confirm_title"),
+                Localization.get("import_confirm_msg", len(imported['tasks'])),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -845,9 +1062,9 @@ class MainWindow(QMainWindow):
 
             self.db.save_data()
             self.refresh_all()
-            QMessageBox.information(self, "Başarılı", f"{added} yeni görev başarıyla içe aktarıldı.")
+            QMessageBox.information(self, Localization.get("export_success_title"), Localization.get("import_success", added))
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"İçe aktarma başarısız:\n{str(e)}")
+            QMessageBox.critical(self, Localization.get("export_error_title"), Localization.get("import_error", str(e)))
 
 
 SINGLE_INSTANCE_KEY = "auratask_single_instance"
@@ -897,13 +1114,15 @@ class SingleInstanceApp(QApplication):
 
 def main():
     app = SingleInstanceApp(sys.argv)
-    app.setStyleSheet(STYLE_SHEET)
 
     # Zaten çalışıyorsa mevcut örneği ön plana getir ve çık
     if app.is_already_running():
         sys.exit(0)
 
+    # MainWindow loads the saved theme in __init__ before get_stylesheet() is called
     window = MainWindow()
+    # Now apply the correct stylesheet (theme already set by MainWindow.__init__)
+    app.setStyleSheet(get_stylesheet())
     app.start_server(window)
     window.show()
     sys.exit(app.exec())
