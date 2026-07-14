@@ -8,6 +8,7 @@
         "pomodoro_work_minutes": 15,
         "pomodoro_break_minutes": 10,
         "pomodoro_long_break_minutes": 30,
-        "theme": "default"
+        "theme": "default",
+        "autostart": false
     }
 }

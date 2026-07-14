@@ -212,7 +212,12 @@ TRANSLATIONS = {
         "theme_default": "Default Dark",
         "theme_cyberpunk": "Cyberpunk Neon",
         "theme_nord": "Nordic Frost (Nord)",
-        "theme_emerald": "Emerald Green (Emerald)"
+        "theme_emerald": "Emerald Green (Emerald)",
+        "autostart_section_title": "🚀 Start on Login",
+        "autostart_section_desc": "Launch AuraTask automatically when you log in. The app will start minimized to the system tray.",
+        "autostart_toggle_label": "Start AuraTask on system login",
+        "autostart_enabled_msg": "AuraTask will now start automatically on login (minimized to tray).",
+        "autostart_disabled_msg": "Automatic startup on login has been disabled."
     },
     "tr": {
         "todo": "Yapılacak",
@@ -424,7 +429,12 @@ TRANSLATIONS = {
         "theme_default": "Varsayılan Koyu",
         "theme_cyberpunk": "Cyberpunk Neon",
         "theme_nord": "Kutup Rüzgarı (Nord)",
-        "theme_emerald": "Zümrüt Yeşili (Emerald)"
+        "theme_emerald": "Zümrüt Yeşili (Emerald)",
+        "autostart_section_title": "🚀 Girişte Başlat",
+        "autostart_section_desc": "Sisteme giriş yaptığınızda AuraTask otomatik olarak başlasın. Uygulama sistem tepsisine küçültülmüş olarak açılır.",
+        "autostart_toggle_label": "Sistem girişinde AuraTask'ı başlat",
+        "autostart_enabled_msg": "AuraTask artık girişte otomatik başlayacak (sistem tepsisine küçültülmüş).",
+        "autostart_disabled_msg": "Girişte otomatik başlatma devre dışı bırakıldı."
     },
     "es": {
         "todo": "Por Hacer",
@@ -636,7 +646,12 @@ TRANSLATIONS = {
         "theme_default": "Oscuro Predeterminado",
         "theme_cyberpunk": "Cyberpunk Neón",
         "theme_nord": "Nordic Frost (Nord)",
-        "theme_emerald": "Verde Esmeralda (Emerald)"
+        "theme_emerald": "Verde Esmeralda (Emerald)",
+        "autostart_section_title": "🚀 Inicio de Sesión",
+        "autostart_section_desc": "Inicia AuraTask automáticamente al iniciar sesión. La aplicación se abrirá minimizada en la bandeja del sistema.",
+        "autostart_toggle_label": "Iniciar AuraTask al inicio de sesión",
+        "autostart_enabled_msg": "AuraTask se iniciará automáticamente al iniciar sesión (minimizado en la bandeja).",
+        "autostart_disabled_msg": "El inicio automático al iniciar sesión ha sido desactivado."
     }
 }
 

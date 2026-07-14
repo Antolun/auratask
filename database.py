@@ -25,7 +25,8 @@ class Database:
                 "pomodoro_work_minutes": 15,
                 "pomodoro_break_minutes": 10,
                 "pomodoro_long_break_minutes": 30,
-                "theme": "default"
+                "theme": "default",
+                "autostart": False
             }
         }
 
@@ -53,6 +54,8 @@ class Database:
                     data["stats"]["pomodoro_long_break_minutes"] = 15
                 if "theme" not in data["stats"]:
                     data["stats"]["theme"] = "default"
+                if "autostart" not in data["stats"]:
+                    data["stats"]["autostart"] = False
                 return data
 
         except Exception as e:
@@ -169,6 +172,11 @@ class Database:
     def set_theme(self, theme_name):
         stats = self.data["stats"]
         stats["theme"] = theme_name
+        self.save_data()
+
+    def set_autostart(self, enabled: bool):
+        stats = self.data["stats"]
+        stats["autostart"] = enabled
         self.save_data()
 
 
