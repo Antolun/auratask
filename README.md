@@ -14,31 +14,19 @@ AuraTask is a desktop productivity application built with Python and PyQt6 (Qt6)
 
 ---
 
-## System Requirements
-
-*   **Python 3.x**
-*   **PyQt6** (`pip install PyQt6`)
-*   **Pillow** (`pip install Pillow` - *Used for logo rendering*)
-
----
-
-## Installation (KDE Plasma & Other Desktop Environments)
-
-A custom installation script is provided to register the application in the desktop menus (complete with launcher search and application icon).
-
-### 1. Install
-Open your terminal in the project directory and run:
+## Installation & Build
 
 ```bash
-chmod +x install.sh
-./install.sh --install
-```
+# 1. Clone the Repository
+git clone https://github.com/TeknoAnka/auratask.git
+cd auratask
 
-### Uninstall
-To completely remove the application files, desktop shortcuts, and configurations from your system:
+# 2. Build
+chmod +x ./build-pisi.sh
+sudo ./build-pisi.sh
 
-```bash
-./install.sh --uninstall
+# 3. Install
+sudo pisi it ./auratask-*-x86_64.pisi
 ```
 
 *Note: On uninstallation, if any task data exists (`tasks.json`), the script will automatically create a backup called `tasks_backup.json` in your development directory to prevent accidental data loss.*
@@ -54,12 +42,3 @@ python3 AuraTask
 ```
 
 ---
-
-## Project Structure
-
-*   `AuraTask`: Main entry point and main window coordination.
-*   `widgets.py`: Custom GUI elements including Kanban cards, columns, Pomodoro timer, dialog forms, and custom analytics chart.
-*   `database.py`: Handles saving, loading, and structural checks of task and stats data.
-*   `style.py`: Contains QSS (Qt Style Sheet) rules for the global dark mode theme.
-*   `install.sh`: Setup script for deployment and KDE menu integration.
-*   `data/logo.png`: Transparent application logo asset.

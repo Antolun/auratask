@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AuraTask
+GenericName=AuraTask
+Comment=Pomodoro & Kanban
+Exec=auratask %u
+Icon=auratask
+Terminal=false
+Categories=Qt;LupuS;Development;Science;
+Keywords=pomodoro;kanban;lupus;task;
+StartupNotify=true
+StartupWMClass=auratask

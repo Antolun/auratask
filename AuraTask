@@ -14,16 +14,16 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QShortcut
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
-from database import Database
-import style as _style_mod
-from style import get_stylesheet, set_active_theme, THEMES
-from widgets import (
+from auratask.database import Database
+import auratask.style as _style_mod
+from auratask.style import get_stylesheet, set_active_theme, THEMES
+from auratask.widgets import (
     KanbanColumnWidget, PomodoroWidget, 
     TaskDialog, AnalyticsChartWidget, CircularGoalWidget,
     HeatmapWidget, DonutChartWidget, CalendarViewWidget,
     create_vector_icon
 )
-from localization import Localization
+from auratask.localization import Localization
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1150, 750)
         
         # Set Window Icon
-        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "logo.png")
+        logo_path = os.path.join("/usr/share/icons/hicolor/128x128/apps/auratask.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
             
