@@ -38,9 +38,9 @@ def install():
     pisitools.dobin(launcher_path)
 
     # Desktop entry
-    desktop_path = os.path.join(src_dir, "com.teknoanka.auratask.desktop")
+    desktop_path = os.path.join(src_dir, "com.antolun.auratask.desktop")
     if not os.path.isfile(desktop_path):
-        desktop_path = "com.teknoanka.auratask.desktop"
+        desktop_path = "com.antolun.auratask.desktop"
     if os.path.isfile(desktop_path):
         pisitools.insinto("/usr/share/applications", desktop_path)
 

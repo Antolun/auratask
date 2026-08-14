@@ -3,7 +3,7 @@
 <PISI>
     <Source>
         <Name>auratask</Name>
-        <Homepage>https://github.com/TeknoAnka/auratask</Homepage>
+        <Homepage>https://github.com/Antolun/auratask</Homepage>
         <Packager>
             <Name>Solzic0</Name>
             <Email>solzic0@yandex.com</Email>
@@ -23,7 +23,7 @@
         <Files>
             <Path fileType="executable">/usr/bin/auratask</Path>
             <Path fileType="data">/usr/share/auratask</Path>
-            <Path fileType="data">/usr/share/applications/com.teknoanka.auratask.desktop</Path>
+            <Path fileType="data">/usr/share/applications/com.antolun.auratask.desktop</Path>
             <Path fileType="data">/usr/share/icons/hicolor/128x128/apps/auratask.png</Path>
             <Path fileType="doc">/usr/share/doc/auratask</Path>
         </Files>

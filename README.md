@@ -6,11 +6,11 @@ AuraTask is a desktop productivity application built with Python and PyQt6 (Qt6)
 
 ## Features
 
-*   **Kanban Task Board**: Organize tasks across "To Do", "In Progress", and "Completed" columns. Set priorities (Low, Medium, High) and add custom tags.
-*   **Focus Timer (Pomodoro)**: Manage your work (25 min) and break (5 min / 15 min) intervals with a custom `QPainter` animated circular countdown timer.
-*   **Productivity Analytics**: Visualize your completed focus sessions and daily focus duration using beautiful custom-drawn column charts.
-*   **Premium UI (Dark Mode)**: Eye-pleasing design featuring modern indigo/slate color palettes, smooth border radius, and elegant shadows.
-*   **Persistent Local Storage**: Your tasks and stats are securely saved locally in a structured JSON file, maintaining data between sessions.
+- **Kanban Task Board**: Organize tasks across "To Do", "In Progress", and "Completed" columns. Set priorities (Low, Medium, High) and add custom tags.
+- **Focus Timer (Pomodoro)**: Manage your work (25 min) and break (5 min / 15 min) intervals with a custom `QPainter` animated circular countdown timer.
+- **Productivity Analytics**: Visualize your completed focus sessions and daily focus duration using beautiful custom-drawn column charts.
+- **Premium UI (Dark Mode)**: Eye-pleasing design featuring modern indigo/slate color palettes, smooth border radius, and elegant shadows.
+- **Persistent Local Storage**: Your tasks and stats are securely saved locally in a structured JSON file, maintaining data between sessions.
 
 ---
 
@@ -18,7 +18,7 @@ AuraTask is a desktop productivity application built with Python and PyQt6 (Qt6)
 
 ```bash
 # 1. Clone the Repository
-git clone https://github.com/TeknoAnka/auratask.git
+git clone https://github.com/Antolun/auratask.git
 cd auratask
 
 # 2. Build
@@ -29,7 +29,7 @@ sudo ./build-pisi.sh
 sudo pisi it ./auratask-*-x86_64.pisi
 ```
 
-*Note: On uninstallation, if any task data exists (`tasks.json`), the script will automatically create a backup called `tasks_backup.json` in your development directory to prevent accidental data loss.*
+_Note: On uninstallation, if any task data exists (`tasks.json`), the script will automatically create a backup called `tasks_backup.json` in your development directory to prevent accidental data loss._
 
 ---
 
