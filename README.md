@@ -22,11 +22,11 @@ git clone https://github.com/Antolun/auratask.git
 cd auratask
 
 # 2. Build
-chmod +x ./build-pisi.sh
-sudo ./build-pisi.sh
+chmod +x ./build-luppo.sh
+sudo ./build-luppo.sh
 
 # 3. Install
-sudo pisi it ./auratask-*-x86_64.pisi
+sudo luppo it ./auratask-*-x86_64.luppo
 ```
 
 _Note: On uninstallation, if any task data exists (`tasks.json`), the script will automatically create a backup called `tasks_backup.json` in your development directory to prevent accidental data loss._

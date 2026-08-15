@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-from pisi.actionsapi import pisitools
-from pisi.actionsapi import shelltools
+from luppo.actionsapi import luppotools
+from luppo.actionsapi import shelltools
 import os
 
 WorkDir = "."
@@ -16,13 +16,13 @@ def install():
     if not os.path.isfile(main_py):
         main_py = "AuraTask"
     if os.path.isfile(main_py):
-        pisitools.insinto("/usr/share/auratask", main_py)
+        luppotools.insinto("/usr/share/auratask", main_py)
 
     auratask_dir = os.path.join(src_dir, "auratask")
     if not os.path.isdir(auratask_dir):
         auratask_dir = "auratask"
     if os.path.isdir(auratask_dir):
-        pisitools.insinto("/usr/share/auratask", auratask_dir)
+        luppotools.insinto("/usr/share/auratask", auratask_dir)
 
     # Launcher script (/usr/bin/auratask)
     launcher_path = os.path.join(src_dir, "auratask")
@@ -35,31 +35,31 @@ def install():
         os.chmod("auratask", 0o755)
         launcher_path = "auratask"
 
-    pisitools.dobin(launcher_path)
+    luppotools.dobin(launcher_path)
 
     # Desktop entry
-    desktop_path = os.path.join(src_dir, "com.antolun.auratask.desktop")
+    desktop_path = os.path.join(src_dir, "auratask.desktop")
     if not os.path.isfile(desktop_path):
-        desktop_path = "com.antolun.auratask.desktop"
+        desktop_path = "auratask.desktop"
     if os.path.isfile(desktop_path):
-        pisitools.insinto("/usr/share/applications", desktop_path)
+        luppotools.insinto("/usr/share/applications", desktop_path)
 
     # App icon
     icon_path = os.path.join(src_dir, "data", "auratask.png")
     if not os.path.isfile(icon_path):
         icon_path = os.path.join("data", "auratask.png")
     if os.path.isfile(icon_path):
-        pisitools.insinto("/usr/share/icons/hicolor/128x128/apps", icon_path, "auratask.png")
+        luppotools.insinto("/usr/share/icons/hicolor/128x128/apps", icon_path, "auratask.png")
 
     # Documentation & License
     readme_path = os.path.join(src_dir, "README.md")
     if not os.path.isfile(readme_path):
         readme_path = "README.md"
     if os.path.isfile(readme_path):
-        pisitools.dodoc(readme_path)
+        luppotools.dodoc(readme_path)
 
     license_path = os.path.join(src_dir, "LICENSE")
     if not os.path.isfile(license_path):
         license_path = "LICENSE"
     if os.path.isfile(license_path):
-        pisitools.dodoc(license_path)
+        luppotools.dodoc(license_path)
